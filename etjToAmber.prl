@@ -1,0 +1,117 @@
+#!/usr/bin/perl
+
+$coord_width = 13;
+$angle_width = 12;
+
+$outLine="";
+$countInLine=0;
+$atomCount  =0;
+
+##get lines from stdin or from a filename passed at the command line
+GET_LINE: while($line = <>) {
+
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {  @asArray = split(/\s+/, $line);
+
+        if( $asArray[0] =~ /Number/ ) {
+            print "#".$asArray[1]." ";
+            $atomsInFrame = $asArray[1];
+        }
+        elsif(  $asArray[0] =~ /Boxx/ ) {
+            print $asArray[1]." ";
+        }
+        elsif(  $asArray[0] =~ /Boxy/ ) {
+            print $asArray[1]." ";
+        }
+        elsif(  $asArray[0] =~ /Boxz/ ) {
+            print $asArray[1]."\n";
+        }
+	    next GET_LINE;
+    }
+    
+    ##parse out coords and orientations
+    $R[0] = substr($line, 0,                $coord_width );
+    $R[1] = substr($line, $coord_width,     $coord_width );
+    $R[2] = substr($line, 2 * $coord_width, $coord_width );
+
+    $M[0] = substr($line, 3 * $coord_width,  $angle_width );
+    $M[1] = substr($line, 3 * $coord_width + $angle_width,     $angle_width );
+    $M[2] = substr($line, 3 * $coord_width + 2 * $angle_width, $angle_width );
+    
+    ##print out as amber-format atom records - two per ellipsoid!
+    for( $i = 0; $i < 3; $i++ ){
+
+        #truncate to three decimal places
+        $x = sprintf("%4.3f", $R[$i]);
+
+        #add leading spaces to generate fixed-width field
+        $x = pad( $x, 8);
+
+        $outLine = $outLine.$x;
+        $countInLine++;
+        if( $countInLine == 10 ){
+            print $outLine."\n";
+            $outLine     = "";
+            $countInLine = 0;
+        }
+    
+        
+        #truncate to three decimal places
+        $x = sprintf("%4.3f", $M[$i]);
+
+        #add leading spaces to generate fixed-width field
+        $x = pad( $x, 8);
+
+        $outLine = $outLine.$x;
+        $countInLine++;
+        if( $countInLine == 10 ){
+            print $outLine."\n";
+            $outLine     = "";
+            $countInLine = 0;
+        }
+    }
+    $atomCount++;
+    if( $atomCount == $atomsInFrame ){
+       if( $countInLine != 0 ){
+            print $outLine."\n";
+            $outLine     = "";
+            $countInLine = 0;
+
+       }
+       $atomCount = 0;
+#       print stderr "wrote frame\n";
+    }
+
+}
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+	$in = " ".$in;
+    }
+
+    return( $in );
+}
+
+##function to strip a string with leading spaces
+sub spstrip{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) > 0 ){
+	if( $in[0] == ' ' )
+        {
+	    $in = substr($in, 1, length( $in ) );
+	}
+	else
+	{
+	    return( $in );
+	}
+    }
+
+    return( $in );
+}

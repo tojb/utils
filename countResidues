@@ -1,0 +1,11 @@
+#!/bin/bash
+
+pdbFile=$1
+
+awk 'BEGIN{count=0;resCode=0xdeadbeef}{if($1=="ATOM" && $5!=resCode){resCode=$5;count++}}END{print count}' $1
+
+
+
+
+
+

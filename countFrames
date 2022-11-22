@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+#perl scrip to count frames in a crd (.x) file
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#get argument
+if( scalar ( @ARGV ) < 1 )
+{
+	die "requires minimum a single argument: filename of a .x file\n";
+}
+
+
+while( scalar ( @ARGV ) >= 1 )
+{
+
+$fileName   = shift;
+$frameCount = 0;
+
+#open file
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#chug the first line
+$inLine = <$in>;
+
+$inLine = <$in>;
+$normalLength = length( $inLine );
+
+while( $inLine = <$in> )
+{
+	$l =  length( $inLine )."\n";
+
+	if( $l != $normalLength )
+	{
+	    $frameCount++;  
+	}
+
+}
+
+close $in;
+
+print "$frameCount\n";
+
+
+}

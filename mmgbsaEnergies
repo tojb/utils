@@ -1,0 +1,100 @@
+#!/usr/bin/perl
+#perl script to get various energy values out of a sander dump file.
+
+#get argument
+if( scalar ( @ARGV ) < 1 )
+{
+    print  "requires minimum 1 argument: filename of an mmpbsa .out file.\n";
+   die "can have options: getEnergies [-tstart TIMEPS] [-tstop TIMEPS] file .\n";
+}
+
+
+
+open( my $eTotFile, ">",      "eTot.dat"); 
+
+
+my $minTime = 0;
+my $startTime = 0;
+my $stopTime = 0;
+my $time = 0;
+my $i = 0;
+
+#loop over each file passed in.
+$fileName = shift;
+
+if( $fileName eq "-tstart" )
+{
+    #have been passed a command line option! w007! 
+    $startTime = shift;
+    $fileName  = shift;
+}
+if( $fileName eq "-tstop" )
+{
+    #have been passed a command line option! time to stop reading stuff in, 
+    #in ps. 
+    $stopTime  = shift;
+    $fileName  = shift;
+}
+
+
+#open file
+open( my $in,   $fileName )    or die "Couldn't read $fileName: $!";
+
+
+#Etot values should form an unbroken series, starting from the first one.
+my $gotFirst = 0;
+my $sinceHit = 0;
+
+
+#read the file into an array
+while ( $input = <$in> ) 
+{
+   #each entry proceeded by an integer number
+   if( $input =~ /^(\d+)/ )
+   {
+       $time = $1;
+   }
+   elsif(  $input =~ /BOND/ )
+   {
+       @line = split( /\s+/, $input );
+
+       $bond  = $line[3];
+       $angle = $line[6];
+       $dihed = $line[9];
+
+   }
+   elsif(  $input =~ /VDWAALS/ )
+   {
+       @line = split( /\s+/, $input );
+
+       $vdw  = $line[3];
+       $eel  = $line[6];
+       $egb  = $line[9];
+
+   }
+   elsif(  $input =~ /RESTRAINT/ )
+   {
+       @line = split( /\s+/, $input );
+
+       $vdw  += $line[3];
+       $eel  += $line[6];
+
+       if(( $time >= $startTime ) 
+	  && ( $stopTime == 0 || $time <= $stopTime ) )
+       {
+
+	   $eTot = $bond + $angle + $dihed + $vdw + $eel + $egb;
+	   print $eTotFile  "$time $eTot \n";
+
+       }
+
+   }
+
+
+
+
+}
+
+close $in;
+close  $eTotFile;
+

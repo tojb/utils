@@ -1,0 +1,131 @@
+#!/usr/bin/perl
+
+#!/usr/bin/perl
+#perl script to merge a high-concentration saltbox with 
+#a biomolecule, deleting ions which clash with the mol
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+$exclusionRadius      = 5.0;
+$exclusionRadius_ions = 5.0;
+
+
+if( scalar ( @ARGV ) < 3 ){
+   die "saltBox.prl: requires Arguments: saltbox.pdb mol.pdb boxWidth";
+}
+
+$saltBoxFileName=shift;
+$pdbFileName=shift;
+$boxWidth=shift;
+
+open($saltFile, $saltBoxFileName) 
+    or die "Couldn't open $saltBoxFileName :$!\n"; 
+open($pdbFile, $pdbFileName) 
+    or die "Couldn't open $pdbFileName :$!\n"; 
+
+$molAt=0;
+while ( $pdbLine = <$pdbFile> ) {
+    if ( $pdbLine =~ 
+      /(ATOM)(\s+\S+\s+\S+\s+\S+\s+\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+\s+\S+)/ ){
+
+       #the regexp automatically dumps the coords into these numbered variables.
+       $x[$molAt] = $4;
+       $y[$molAt] = $6;
+       $z[$molAt] = $8;
+    
+       print $pdbLine;
+       #print stderr "mol at @ $4 $6 $8 \n";
+
+       $molAt++;
+
+    }elsif ( $pdbLine =~ /TER/){
+       print $pdbLine;
+    }
+}
+
+$readSalts=0;
+$wroteSalts=0;
+SALT_AT: while ( $pdbLine = <$saltFile> ) {
+    if ( $pdbLine =~ /(ATOM)(\s+\S+\s+\S+\s+\S+\s+\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+\s+\S+)/ ){
+
+	$x1 = $4;
+	$y1 = $6;
+	$z1 = $8;
+
+	$readSalts++;
+
+	##check for clashes
+MOL_AT:  for($i = 0; $i < $molAt + $wroteSalts; $i++ ){
+
+           $r2  = ($x1 -  $x[$i]) * ($x1 -  $x[$i]);
+           $r2 += ($y1 -  $y[$i]) * ($y1 -  $y[$i]);
+           $r2 += ($z1 -  $z[$i]) * ($z1 -  $z[$i]);
+	   if( $r2 > $exclusionRadius_ions * $exclusionRadius_ions ){
+	       next MOL_AT;
+	   }elsif($r2 > $exclusionRadius * $exclusionRadius 
+                && $i < $molAt ){
+	       next MOL_AT;
+	   }
+	   else{
+
+               $haveClash=1;
+REPLACE_AT:    while($haveClash == 1){	 
+
+                 #re-select coords at random
+		 $x1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+		 $y1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+		 $z1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+	       
+	         for( $j = 0; $j < $molAt + $wroteSalts; $j++ ){
+		   $r2  = ($x1 -  $x[$j]) * ($x1 -  $x[$j]);
+		   $r2 += ($y1 -  $y[$j]) * ($y1 -  $y[$j]);
+		   $r2 += ($z1 -  $z[$j]) * ($z1 -  $z[$j]);
+		   if( $r2 <= $exclusionRadius_ions * $exclusionRadius_ions ){
+		        
+		       next REPLACE_AT;
+		   }
+	         }
+		$haveClash = 0;
+	       }
+	       
+	       #insert the modified coordinates
+	       substr($pdbLine, 30, 8) =  substr(pad($x1,8), 0, 8);
+	       substr($pdbLine, 38, 8) =  substr(pad($y1,8), 0, 8);
+	       substr($pdbLine, 46, 8) =  substr(pad($z1,8), 0, 8);
+    
+	   }
+       }
+       ##finished the mol_at loop without breaking out due to a clash
+       print $pdbLine;
+
+       $x[$molAt + $wroteSalts] = $x1;
+       $y[$molAt + $wroteSalts] = $y1;
+       $z[$molAt + $wroteSalts] = $z1;
+       $wroteSalts++;
+       if($wroteSalts % 10 == 0){
+          print stderr "wrote $wroteSalts of ions\n";
+       }
+    }elsif ( $pdbLine =~ /TER/){ ##can have double TER card
+	print $pdbLine;
+    }
+
+}
+
+print stderr "Wrote $wroteSalts non-clashing of $readSalts ionic atoms\n";
+
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+        $in = " ".$in;
+    }
+
+    return( $in );
+}
+

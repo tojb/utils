@@ -1,0 +1,52 @@
+#!/usr/bin/perl
+
+
+$inFileName=shift;
+
+open( $inFile, $inFileName ) or die "failed to open file: $inFileName";
+
+##count header size
+while($line = <$inFile>) {
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {
+        $headerEnd = tell( $inFile ); ##save end of header bytes
+    }
+    else{
+        last;##start reading frame    
+    }
+}
+
+
+##count frame size
+while($line = <$inFile>) {
+    if( length( $line ) < 3 ) { ##ie is first frame-terminating empty line
+        $line = <$inFile>; ##null
+        $frameEnd = tell( $inFile ); ##end of frame
+        last;
+    }
+}
+$frameSize = $frameEnd - $headerEnd;
+
+##set filepointer to end of trajectory
+seek( $inFile, 0, 2 );
+$fileSize = tell( $inFile );
+
+##find number of frames
+$nFrames = ( $fileSize - $headerEnd ) / $frameSize;
+
+print "$nFrames\n";
+
+
+
+
+
+
+
+
+
+
+
+
+
+

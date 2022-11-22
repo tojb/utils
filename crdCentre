@@ -1,0 +1,156 @@
+#!/usr/bin/perl
+#perl scrip to centre and sort a pdb
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+
+#accept if passed in as arguments.
+if( scalar ( @ARGV ) == 1 )
+{
+	$inPDBName       = shift;
+}
+else
+{
+	print "crdCentre: takes argument 1 amber crdfile.\n";
+
+	die;
+}
+
+
+##############################################
+#
+#open the file
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+
+$nLines        = 0;
+$nAtoms        = 0;
+$fileNumber    = 1;
+$writeThisFile = 0;
+
+
+#read through the pdb by lines, get the centre of the thing.
+$xTot = 0;
+$yTot = 0;
+$zTot = 0;
+#pass through the first two lines
+$pdbLine = <$inPDB>;
+$pdbLine = <$inPDB>;
+@lineArray = split(/\s+/, $pdbLine);
+$nAtoms=$lineArray[0];
+print stderr scalar(@lineArray)." nAtoms: $nAtoms\n";
+while ( $pdbLine = <$inPDB> ) 
+{
+  @lineArray = split(/\s+/, $pdbLine);
+  if(scalar(@lineArray) > 3){
+   $xAv = $lineArray[1] * 0.5;
+   $yAv = $lineArray[2] * 0.5;
+   $zAv = $lineArray[3] * 0.5;
+  }
+}
+#end up keeping the last line
+print stderr "box: $xAv .. $yAv .. $zAv \n";
+
+close  $inPDB;	
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+#pass through the first two lines
+$pdbLine = <$inPDB>;
+print $pdbLine;
+$pdbLine = <$inPDB>;	
+print $pdbLine;
+
+
+$atNumber  = 1;
+while ( $pdbLine = <$inPDB> ) 
+{
+
+    if($atNumber <= $nAtoms ){
+
+        @lineArray = split(/\s+/, $pdbLine);
+        $x1 = sprintf( "%4.7f",$lineArray[1] - $xAv);
+        $y1 = sprintf( "%4.7f",$lineArray[2] - $yAv);
+        $z1 = sprintf( "%4.7f",$lineArray[3] - $zAv);
+
+
+        #depending on the size of the number it eats into 
+	#the leading spaces
+	$leadingSpaces = 12 - length($x1);
+	if( $leadingSpaces <= 0 )
+	{ print "X is $x1\n"; die "format hassles here . \n";}	
+	$lead = "";
+	for( my $j = 0; $j < $leadingSpaces ; $j++)	
+	{$lead = $lead." ";}
+        $line = $lead.$x1;
+
+	$leadingSpaces = 12 - length($y1);
+	if( $leadingSpaces <= 0 )
+	{ print "X is $x1\n"; die "format hassles here . \n";}	
+	$lead = "";
+	for( my $j = 0; $j < $leadingSpaces ; $j++)	
+	{$lead = $lead." ";}
+        $line = $line.$lead.$y1;
+
+	$leadingSpaces = 12 - length($z1);
+	if( $leadingSpaces <= 0 )
+	{ print "X is $x1\n"; die "format hassles here . \n";}	
+	$lead = "";
+	for( my $j = 0; $j < $leadingSpaces ; $j++)	
+	{$lead = $lead." ";}
+        $line = $line.$lead.$z1;
+
+        $atNumber++;
+
+
+        if( scalar(@lineArray) > 3) {
+          $x1 = sprintf( "%4.7f",$lineArray[4] - $xAv);
+          $y1 = sprintf( "%4.7f",$lineArray[5] - $yAv);
+          $z1 = sprintf( "%4.7f",$lineArray[6] - $zAv);
+        
+          #depending on the size of the number it eats into 
+          #the leading spaces
+          $leadingSpaces = 12 - length($x1);
+          if( $leadingSpaces <= 0 )
+          { print "X is $x1\n"; die "format hassles here . \n";}	
+          $lead = "";
+          for( my $j = 0; $j < $leadingSpaces ; $j++)	
+          {$lead = $lead." ";}
+          $line = $line.$lead.$x1;
+
+          $leadingSpaces = 12 - length($y1);
+          if( $leadingSpaces <= 0 )
+          { print "X is $x1\n"; die "format hassles here . \n";}	
+          $lead = "";
+          for( my $j = 0; $j < $leadingSpaces ; $j++)	
+          {$lead = $lead." ";}
+          $line = $line.$lead.$y1;
+
+          $leadingSpaces = 12 - length($z1);
+          if( $leadingSpaces <= 0 )
+          { print "X is $x1\n"; die "format hassles here . \n";}	
+          $lead = "";
+          for( my $j = 0; $j < $leadingSpaces ; $j++)	
+          {$lead = $lead." ";}
+          $line = $line.$lead.$z1;
+
+          
+        $atNumber++;
+
+        }
+
+
+
+	    print $line."\n";	
+
+	 }
+   	 else
+	 {
+	     print $pdbLine;
+	 }
+  }
+
+#all done
+close  $inPDB;		
+		 
+      

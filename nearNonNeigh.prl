@@ -1,0 +1,128 @@
+#!/usr/bin/perl
+
+if( scalar ( @ARGV ) != 1 )
+{
+	die "requires minimum 1 arguments: pdb file which serves as atom mask.";
+}
+
+$maskFileName = shift;
+
+#open the files
+open( my $inMask,  $maskFileName )    or die "Couldn't read $maskFileName: $!";
+
+
+#parse the mask
+$i = 0;
+while( $inLine = <$inMask> )
+{
+    @inList = split ( /\s+/, $inLine );
+
+    if( $inList[0] eq 'ATOM' )
+    {
+	$atNo[$i]    = $inList[1];
+	$atName[$i]  = $inList[2];
+	$resNo[$i]   = $inList[4];
+
+	$atCrds[$i][0] = $inList[5];
+	$atCrds[$i][1] = $inList[6];
+	$atCrds[$i][2] = $inList[7];
+
+	$i++;
+    }
+}
+close $inMask;
+
+
+$nAtoms = $i;
+ATOM: for( $i = 0; $i < $nAtoms; $i++ )
+{
+    if( isH( $atName[$i] ) )
+    {
+	 next ATOM;
+    }
+    
+
+    $j           =  0;
+    $nearest     = -1.0;
+    $meanNearest =  0.0;
+    $nearestCount = 0;
+
+NEIGHBOUR:while( $j++ < $nAtoms )
+    {
+	if( isH( $atName[$j] ) )
+	{
+	    next NEIGHBOUR;
+	}
+	if( $resNo[$j] == $resNo[$i] )
+	{
+	    next NEIGHBOUR;
+	}
+	if( $resNo[$j] == ( $resNo[$i] - 1 ) || $resNo[$j] == ( $resNo[$i] + 1 ) )
+	{
+	    if( isBB( $atName[$j] ) )
+	    {
+		next NEIGHBOUR;
+	    }
+	}
+	  
+	$distance = pythagoras(  \$atCrds[$i], \$atCrds[$j] );
+	if( $distance < $nearest || $nearest < 0.0 )
+	{
+	
+	    $nearest         = $distance;
+	    $nearestAtom[$i] = $j;
+	}
+
+    }
+    $meanNearest  += $nearest;
+    $nearestCount++;
+
+print "Aprime $i:  $resNo[$i] $atName[$i] --- $resNo[$nearestAtom[$i]] $atName[$nearestAtom[$i]]-- $nearest  \n";
+    
+}
+print "Aprime: ".$meanNearest / $nearestCount." \n";
+
+
+
+
+sub pythagoras {
+
+    my $x = shift;
+    my $y = shift;
+
+    my @xray = $$x; 
+    my @yray = $$y; 
+
+    my $r = ($xray[0][0] - $yray[0][0])**2 + ($xray[0][1] - $yray[0][1])**2 + ($xray[0][2] - $yray[0][2])**2;
+
+    $r = sqrt( $r );
+
+    return( $r );
+}
+
+sub isH {
+    my $name = shift;
+
+    if( $name =~ /H/ )
+    {
+	return( 1 );
+    }
+    else
+    {
+	return( 0 );
+    }
+}
+
+sub isBB {
+    my $name = shift;
+
+    if( $name eq 'C' || $name eq 'CA' ||  $name eq 'O' || $name eq 'N' || $name eq 'H' )
+    {
+	return( 1 );
+    }
+    else
+    {
+	return( 0 );
+    }
+
+}

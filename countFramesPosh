@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+#perl scrip to count frames in a crd (.x) file
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#get argument
+if( scalar ( @ARGV ) < 2 )
+{
+	die "requires minimum two arguments: nAtoms plus filename of a .x file\n";
+}
+
+
+$nAtoms=shift;
+$total = 0;
+while( scalar ( @ARGV ) >= 1 )
+{
+
+    $fileName   = shift;
+
+    #count the entries
+    open(P, 'wc --words '."$fileName  |");
+    while ($wc = <P>) {
+	@l = split( /\s+/, $wc ); 
+    }
+    close( P );
+    
+    $wc = $l[0];
+    $wc = $wc / ( $nAtoms * 3 );	
+    $wc = int($wc);
+
+    $total+=$wc;
+
+}
+
+
+print $total."\n";;

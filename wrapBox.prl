@@ -1,0 +1,421 @@
+#!/usr/bin/perl
+###################################################################################
+#
+# Utility to unpack md trajectories after periodic imaging
+#
+# At the moment, works for amber crd files with box info - 
+# but only for truncated octahedrons, and only for a maximum of one cell in any direction.
+# 
+# Converting to rectangular boxes should be very easy.
+#
+# This is a perl script by me, and as such works only by chance.
+# You should check your output carefully.
+#
+# Josh Berryman 2007
+#
+###################################################################################
+###################################################################################
+
+
+####define the faces of a truncated octahedron.
+####you would think that a truncated octohedron had a square face on each axis and a hex face in the
+####middle of each of the eight quadrants of R3;
+####but to get the amber face vectors, 
+####I had to rotate the obvious face vectors by (0.0, 45.0, (109.471219/2.0  - 90.0)).
+
+    $pt_faceVector  = [ [ 1.0,       0.0,    0.0000],
+			[  0.333333333,   0.47140452,   -0.81649658],
+			[  0.333333333,  -0.94280904,    0.0000],
+			[ -0.333333333,  -0.47140452,   -0.81649658],
+			[  0.333333333,   0.47140452,    0.81649658],
+			[ -0.333333333,   0.94280904,    0.0000],
+			[ -0.333333333,  -0.47140452,    0.81649658],
+			[ -1.0,       0.0,      0.0000],
+			[  0.666666667,  -0.47140452,   -0.81649658],
+			[  0.666666667,   0.94280904,    0.0000],
+			[  0.666666667,  -0.47140452,    0.81649658],
+			[ -0.666666667,   0.47140452,    0.81649658],
+			[ -0.666666667,  -0.94280904,    0.0000],
+			[ -0.666666667,   0.47140452,   -0.81649658],];
+			
+
+##check the arguments/print a help
+if( scalar ( @ARGV ) != 2 )
+{
+	 print stderr "Requires 2 arguments: a .x file, and a pdb file which serves a topology and template structure.\n";
+	 print stderr "Each atom will be subjected to whichever periodic-box transforms which keep it nearest to the\n";
+	 print stderr "template structure on the first frame, thereafter to the previous (transformed) frame.\n";
+	 die;
+}
+
+$trajFileName = shift;
+$maskFileName = shift;
+
+
+open( my $inTraj,  $trajFileName )    or die "Couldn't read trajectory $trajFileName: $!";
+open( my $inMask,  $maskFileName )    or die "Couldn't read pdb $maskFileName: $!";
+
+#parse the mask
+$i = 0;
+$resIndex=0;
+$lastResNo=0;
+while( $inLine = <$inMask> )
+{
+    #@inList = split ( /\s+/, $inLine );
+
+    
+    if( substr( $inLine, 0, 4 ) eq 'ATOM' ) 
+    #if( $inList[0] eq 'ATOM' )
+    {
+	$resno[$i]  = substr( $inLine, 24, 3 );
+	$pdb[$i][0] = substr( $inLine, 31, 8 );
+	$pdb[$i][1] = substr( $inLine, 39, 8 );
+	$pdb[$i][2] = substr( $inLine, 47, 8 );
+
+	$frame[$i][0] = $pdb[$i][0];
+	$frame[$i][1] = $pdb[$i][1];
+	$frame[$i][2] = $pdb[$i][2];
+
+	$i++;
+    }
+}
+close $inMask;
+$nAtoms = $i;
+
+###ascertain if we have a crdbox or a restart file
+$headerLine = <$inTraj>;
+$firstLine  = <$inTraj>;
+$firstLine  = <$inTraj>;
+if( length( $firstLine ) == 73 )
+{
+    $format='restart'; 
+    $fieldLength = 12;
+} 
+elsif(  length( $firstLine ) == 81 )
+{
+    $format='trajectory';
+    $fieldLength = 8;
+}
+else
+{
+    die "Do not recognise either a trajectory or restart file format\n".length( $firstLine )."\n";
+} 
+close( $inTraj );
+open( my $inTraj,  $trajFileName )    or die "Couldn't read trajectory $trajFileName: $!";
+
+
+if( $format eq 'trajectory' )
+{
+    #chug the first line
+    $inLine = <$inTraj>;
+    print "Natoms: $nAtoms\n"; ##this helpful output might as well also be the header line of our transformed crd file.
+}
+else
+{
+    ##transfer the restart file header section unchanged.
+    $headerLine = <$inTraj>;
+    print $headerLine;
+    $firstLine  = <$inTraj>;
+    print $firstLine;
+    
+}
+
+
+#####parse the traj
+$frameCount = 0;
+@atQueue    = ();
+
+
+
+####setup pointers for frame and last frame, do some initialising.
+
+$F=\@frame;
+$template=\@pdb;
+$new[0] = 0.0;
+$new[1] = 0.0;
+$new[2] = 0.0;
+
+####loop over frames
+while( 0 != readFrame( $inTraj, $F, $nAtoms, \$boxInfo, \$boxLine, $fieldLength, $format ) )
+{
+    $frameCount++;
+    for( $i = 0; $i < $nAtoms; $i++ )
+    {
+	$R = pythagoras( $F->[$i][0], $template->[$i][0], $F->[$i][1], $template->[$i][1], $F->[$i][2], $template->[$i][2] );
+
+	$threshold = $boxInfo / 4.0; ##arbitrary fraction. translations all have length>=$boxInfo.
+
+	if( $R > $threshold )
+	{
+	    $rBest     = $R;
+	    $indexBest = 0;
+
+	    #loop over available transforms - each of these is a translation normal to a face of the truncoct.
+	    for( $transIndex = 0; $transIndex <= 13; $transIndex++ )
+	    {
+
+		$new[0] = $F->[$i][0];
+		$new[1] = $F->[$i][1];
+		$new[2] = $F->[$i][2];
+
+		transform(  \@new, $boxInfo, $pt_faceVector->[$transIndex] );
+
+		$rTrans = pythagoras( $new[0],  $template->[$i][0], $new[1],  $template->[$i][1],  
+				      $new[2], $template->[$i][2]);
+		
+		$jV[0] = $new[0] - $F->[$i][0];
+		$jV[1] = $new[1] - $F->[$i][1];
+		$jV[2] = $new[2] - $F->[$i][2];
+		
+
+		if( $rTrans < $rBest )
+		{
+		    $rBest = $rTrans;
+		    $indexBest = $transIndex;
+
+		     $F->[$i][0] = $new[0];
+		     $F->[$i][1] = $new[1];
+		     $F->[$i][2] = $new[2];
+		}
+	    }
+	}
+    }
+    
+    
+
+     #write the wrapped crds
+     if( $format eq 'trajectory' )
+     {
+	 printFrame( $F, $nAtoms, $boxLine );
+     }
+     else
+     {
+	 close( $inTraj );##reset the file pointer
+	 open( $inTraj,  $trajFileName )    or die "Couldn't read trajectory $trajFileName: $!";
+	 $headerLine = <$inTraj>;
+	 print stderr $headerLine;
+	 $headerLine = <$inTraj>;
+	 print stderr $headerLine;
+	 printRestart( $F, $nAtoms, $inTraj );
+	 exit;
+     }
+
+     ##switch the template so that it is our new "improved" frame
+     $tmp = $template;
+     $template=$F;
+     $F=$tmp;
+
+
+     if( $frameCount % 10 == 0 )
+     {
+	print stderr "wrote $frameCount frames\n";
+     }
+}
+
+###################################################################################
+#
+#
+#
+# here are some subroutines for mundane tasks. They should all have their own variables locally scoped using 'my'
+#
+#
+#
+###################################################################################
+
+
+sub transform{
+
+    my $pt_new     = shift;
+    my $boxHeight  = shift;
+    my $faceVector  = shift;
+    
+
+    my $angleB = 109.47122;
+
+    $pt_new->[0] += $boxHeight * $faceVector->[0];
+    $pt_new->[1] += $boxHeight * $faceVector->[1];
+    $pt_new->[2] += $boxHeight * $faceVector->[2];
+
+}
+
+sub printFrame{
+
+    my $pt_frame = shift;
+    my $nAtoms   = shift;
+    my $boxLine  = shift;
+    
+    my $entries  = 0;
+    my $line     = ''; 
+
+
+    for( my $i = 0; $i < $nAtoms; $i++ )
+    {
+	for( my $j = 0; $j < 3; $j++ )
+	{
+	    my $x = padStr( sprintf("%5.3f",$pt_frame->[$i][$j]), 8 );
+
+	    $line = $line.$x;
+	    $entries++;
+	    
+	    if( $entries == 10 )
+	    {
+		print $line."\n";
+		$entries = 0;
+		$line = '';
+	    }
+        }
+    } 
+
+    if( $entries != 0 )
+    {
+	print $line."\n";
+    }
+
+
+    print $boxLine."\n";
+
+}
+
+
+sub readFrame{
+
+    my $inTraj   = shift;
+    my $pt_frame = shift;
+    my $nAtoms   = shift;
+    my $pt_boxParm   = shift;
+    my $pt_boxLine   = shift;
+    my $fieldLength   = shift;
+    my $format   = shift;
+    
+    my $atIndex     = 0;
+    my $crdIndex    = 0;
+
+    while( my $inLine = <$inTraj> )
+    {
+	my $numEntries = length( $inLine );
+	my $lineIndex  = 0;
+
+	while( $lineIndex <= $numEntries - $fieldLength )
+	{
+	    #print "$numEntries...$lineIndex\n";
+	    $pt_frame->[$atIndex][$crdIndex++] = substr( $inLine, $lineIndex,  $fieldLength);
+	    if( $crdIndex == 3)
+	    {
+		$crdIndex = 0;
+		$atIndex++;
+		if( $atIndex == $nAtoms )
+		{
+		    if( $format eq 'trajectory' )
+		    {
+			$$pt_boxLine = <$inTraj>;
+			@boxList = split( /\s+/, $$pt_boxLine );
+			$$pt_boxParm = $boxList[1];
+			return( 1 );
+		    }
+		    else
+		    {
+			while( my $line = <$inTraj> ) ##if restart file, need to skip through the velocities to get boxinfo
+		        {
+			    $$pt_boxLine = $line;
+			}
+
+			@boxList = split( /\s+/, $$pt_boxLine );
+			$$pt_boxParm = $boxList[1];
+			return( 1 );
+		    }
+		}
+	    }
+ 
+	    $lineIndex += $fieldLength;
+	}
+    }
+    
+    return( 0 );
+
+}
+
+
+sub printRestart{
+
+    my $pt_frame = shift;
+    my $nAtoms   = shift;
+    my $file     = shift;
+    
+    my $entries  = 0;
+    my $line     = ''; 
+    
+    my $lineCount = 0;
+
+    for( my $i = 0; $i < $nAtoms; $i++ )
+    {
+	for( my $j = 0; $j < 3; $j++ )
+	{
+	    my $x = padStr( sprintf("%12.7f",$pt_frame->[$i][$j]), 12 );
+
+	    $line = $line.$x;
+	    $entries++;
+	    
+	    if( $entries == 6 )
+	    {
+		print $line."\n";
+		$lineCount++;
+		$entries = 0;
+		$line = <$file>; #move the filepointer forward for each line that we print
+		if( !$line )
+		{
+		    die "some mixup with the file pointer at line $lineCount\n";
+		}
+		$line = '';
+	    }
+        }
+    } 
+    if( $entries != 0 )
+    {
+	print $line."\n";
+	$line = <$file>; #move the filepointer forward for each line that we print
+    }
+
+    my $extraLines = 0;
+
+    ##now cycle through the file passing velocities & boxinfo unchanged
+    while( $line = <$file> )
+    {
+	print $line;
+	$extraLines++;
+    }
+    
+    print stderr "Printed $nAtoms non-water crd plus $extraLines other lines\n";
+
+}
+
+
+sub pythagoras {
+
+    my $x = shift;
+    my $y = shift;
+    my $x1 = shift;
+    my $y1 = shift;
+    my $x2 = shift;
+    my $y2 = shift;
+    
+
+    my $r = ($x - $y)**2 + ($x1 - $y1)**2 + ($x2 - $y2)**2;
+
+    $r = sqrt( $r );
+
+    return( $r );
+}
+
+sub padStr
+{
+    my $number       = shift;
+    my $stringLength = shift;
+
+    while( length( $number ) < $stringLength )
+    {
+
+	$number = ' '.$number;
+    }
+
+    return( $number );
+}

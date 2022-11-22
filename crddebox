@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+#perl scrip to strip box information from a crd (.x) file
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#get argument
+if( scalar ( @ARGV ) != 1 )
+{
+	die "requires a single argument: filename of a .x file with box info in it.\n";
+}
+$fileName = shift;
+
+#open file
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#chug the first line
+$inLine = <$in>;
+print $inLine;
+
+$inLine = <$in>;
+print $inLine;
+$normalLength = length( $inLine );
+$lastL = $normalLength;
+
+
+while( $inLine = <$in> )
+{
+	$l =  length( $inLine )."\n";
+
+	if(( $l != $normalLength )
+	 &&( $lastL != $normalLength ))
+	{
+		#box info is on a line of its own, so funny length.
+		#comes after the tail of the frame it describes.
+
+		; #dont pass it through
+	}
+	else
+	{
+		print $inLine;
+	}
+
+	$lastL = $l;
+}
+
+
+

@@ -1,0 +1,108 @@
+#!/usr/bin/perl
+#perl script to build a cubic box of salt
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+$exclusionRadius = 3.0;
+
+if( scalar ( @ARGV ) < 4 ){
+   die "saltBox.prl: requires Arguments: Ion1 Ion2 boxwidth molarity";
+}
+$avogadro="6.02214179e23";
+$avoPerAngstrom="6.02214179e-4";
+$molesWaterPerLitre="55.55";
+$tip3pMolesPerLitre="53.4759";
+
+
+$ion1Name=shift;
+$ion2Name=shift;
+$boxWidth=shift;
+$molarity=shift;
+srand(1902);
+
+
+$boxVol = $boxWidth * $boxWidth * $boxWidth;
+print stderr "box volume: $boxVol AA^3\n";
+
+$countI1 = $molarity / $tip3pMolesPerLitre;
+$countI1 = $countI1 * $boxVol * $avoPerAngstrom;
+print stderr "Concentration $molarity gives $countI1 ions of each species\n";
+$countI1 = int($countI1);
+$countI2 = $countI1;
+
+$pdbLine='ATOM   0000 Cl-  Cl-   000      -0.508   2.732  -6.268  1.00  0.00';
+$atomCount = 1;
+while($atomCount <= $countI1 + $countI2){
+
+    if($atomCount % 2 == 1){
+	$name = $ion1Name;
+    }else{
+	$name = $ion2Name;
+    }
+
+    ##copy the template line
+    $outLine = $pdbLine;
+
+    $clash = 1;
+CLASH: while($clash == 1){
+
+	#select coords at random
+	$x1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+	$y1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+	$z1 = sprintf("%.3f", $boxWidth * rand() - $boxWidth * 0.5);
+
+	for( $i = 1; $i < $atomCount; $i++ ){
+	    
+           $r2  = ($x1 -  $x[$i]) * ($x1 -  $x[$i]);
+           $r2 += ($y1 -  $y[$i]) * ($y1 -  $y[$i]);
+           $r2 += ($z1 -  $z[$i]) * ($z1 -  $z[$i]);
+	   if( $r2 <= $exclusionRadius * $exclusionRadius ){
+	       next CLASH;
+	   }
+	}
+	$clash = 0;
+    }
+    $x[$atomCount] = $x1;
+    $y[$atomCount] = $y1;
+    $z[$atomCount] = $z1;
+
+    #insert the ion name
+    substr($outLine, 12, 3) = pad($name, 3);
+    substr($outLine, 17, 3) = pad($name, 3);
+
+    #insert resid
+    substr($outLine, 21, 5) = pad("$atomCount", 5);
+    
+    #insert the coordinates
+    substr($outLine, 30, 8) =  substr(pad($x1,8), 0, 8);
+    substr($outLine, 38, 8) =  substr(pad($y1,8), 0, 8);
+    substr($outLine, 46, 8) =  substr(pad($z1,8), 0, 8);
+    
+    print $outLine."\nTER\n";
+
+    $atomCount++;
+}
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+        $in = " ".$in;
+    }
+
+    return( $in );
+}
+
+
+
+
+
+
+
+
+

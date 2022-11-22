@@ -1,0 +1,17 @@
+#!/bin/bash
+
+fileStem=$1
+extraLine=$2
+
+echo "source /home/josh/amberCheckout/amber/dat/leap/cmd/leaprc.protein.ff14SB"     >  tmp.xls
+echo $extraLine                                     >> tmp.xls
+echo "unit1 = loadpdb ${fileStem}.pdb"              >> tmp.xls
+echo "solvateoct unit1 TIP3PBOX 15"                 >> tmp.xls
+echo "saveamberparm unit1  ${fileStem}.top ${fileStem}.crd" >> tmp.xls
+echo "quit" >> tmp.xls
+
+
+
+tleap -f tmp.xls
+
+rm tmp.xls

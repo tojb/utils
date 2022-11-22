@@ -1,0 +1,38 @@
+#!/bin/tcsh
+limit stacksize 200M
+if ($#argv != 5) then
+   echo 'USAGE: ASP_do_pca_ptraj [trajectory file name] [parm file name] [output files base name] "[mask for calculations]" [number of eigenvalues to be considered]'
+else
+# CREATE PTRAJ INPUT FILE FOR THE FIRST PASS
+   cat > .ptraj.pca << EOF
+trajin $1
+strip :@N2,H21,H22,H1,O6,N4,H41,H42,H5
+average $3.avg.pdb pdb $4
+atomicfluct out $3.fluct $4
+rms first $4
+matrix covar $4 name mat
+analyze matrix mat name evecs out $3.evecs vecs $5
+EOF
+# RUN PTRAJ
+   ptraj $2 .ptraj.pca
+   rm .ptraj.pca
+# CREATE PTRAJ INPUT FILE FOR THE SECOND PASS
+   cat > .ptraj.pca << EOF
+trajin $1
+strip :@N2,H21,H22,H1,O6,N4,H41,H42,H5
+projection $4 modes $3.evecs out $3.pn beg 1 end $5
+EOF
+# RUN PTRAJ AGAIN
+   ptraj $2 .ptraj.pca
+   rm .ptraj.pca
+# DO PCA ANIMATIONS
+   @ i = 1
+   while ( $i <= $5 )
+      echo Creating animation for eigenvalue $i / $5
+      pca_anim2 -v $3.evecs -p $3.$i.anim -i $i -cauto -pn $3.pn
+      pdbx $3.avg.pdb < $3.$i.anim > .temp.pdbx
+      pdbx_fluct -i .temp.pdbx -o $3.$i.pdbx -f $3.fluct -byatom
+      rm $3.$i.anim .temp.pdbx
+      @ i++
+   end
+endif

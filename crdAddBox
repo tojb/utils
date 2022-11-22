@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+#perl scrip to place dummy box information in a crd (.x) file
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#get argument
+if( scalar ( @ARGV ) != 2 )
+{
+	die "requires a two arguments filename of a .x file without box info in it and number of atoms.\n";
+
+}
+$fileName = shift;
+$nAtoms   = shift;
+
+#open file
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#chug the first line
+$inLine = <$in>;
+print $inLine;
+
+$crds = 0;
+while( $inLine = <$in> )
+{
+    print $inLine;
+    $crds += 10;
+
+
+    if( $crds >= ( $nAtoms * 3 ) )
+    {
+
+	$crds = 0;
+	
+	#dump out dummy boxinfo
+	print "   9.999   9.999   9.999\n";
+
+    }
+}
+
+
+

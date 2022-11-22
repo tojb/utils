@@ -1,0 +1,133 @@
+#!/usr/bin/perl
+#perl scrip to turn ptraj output into a nice histogram
+#
+#to run:$ perl -w script.prl <args>
+#josh.
+
+
+#check number of arguments
+if( ($#ARGV + 1) < 3 )
+{
+	#quite a convoluted way of doing it.
+	# "$#ARGV" is the index of the final member of the array.
+
+	die "\nArguments are: number of histogram bins, \n". 
+	    "column of file to read, filename.\n";
+}
+
+#get arguments
+$binCount   = shift;
+$column     = shift;
+
+#init list of filenames
+@inFileNameList=();
+
+
+
+while( $inFileName = shift )
+{
+    #store the filename
+    push( @inFileNameList, $inFileName );
+
+
+    #open infile
+    open( my $inFile, $inFileName)  or die "Couldn't read file \"$inFileName\":  $!\n";
+
+
+    #if we are on the first file
+    if( scalar ( @inFileNameList ) == 1 )
+    {	
+	#get the first line
+	@line =  split(/\s+/, <$inFile>);
+
+	#init max and min of data range
+	$smallest = $line[$column];
+	$largest  = $line[$column];
+    }
+
+
+   #pass through the file once to read the range of the input data
+   while ( <$inFile> ) 
+   {
+      # split the last line read into an array	
+      @line =  split(/\s+/, $_); 	
+	 
+      if( $line[$column] =~ /\d+/)
+      {
+
+        if( $line[$column] < $smallest )
+        {
+	  $smallest = $line[$column];
+        }		
+   	 	 
+        if( $line[$column] > $largest )
+        {
+	  $largest = $line[$column];
+        }		
+      }	
+
+    }
+
+   ####close the file
+   close( $inFile );
+
+
+} 
+
+
+#####Set up the bins.
+$binSize = ( $largest - $smallest ) / $binCount; 
+if( $binSize <= 0 )
+{
+	die "problems with the binsize: $largest - $smallest - $binCount $!\n";	
+}
+
+
+$fileCount=1;
+foreach $inFileName ( @inFileNameList )
+{
+
+    #init the bins! (neater, but I'm not sure its needed)
+    for( $i = 0 ; $i < $binCount ; $i++ )
+    {	
+	$bins[$i] = 0;	
+    }
+    $nPoints=0.0;
+
+   open( $inFile, $inFileName)  or die "Problems with $inFileName:  $!\n";
+
+   #fill the bins!
+   while ( <$inFile> ) 
+   {
+      # split the last line read into an array	
+      @line =  split(/\s+/, $_); 	
+
+      if( $line[$column] =~ /\d+/)
+      {
+         #get float of index
+         $bindex = ( $line[$column] - $smallest) / $binSize; 	
+   	   
+         #increment the appropriate bin content
+         $bins[int($bindex)] += 1;
+	 $nPoints += 1.0;
+     }
+   }
+
+   close( $inFile );
+
+   #print the bins!
+   for( $i = 0 ; $i < $binCount ; $i++ )
+   {	
+       print "$fileCount  ";
+       print $smallest+($i+0.5)*$binSize."   $bins[$i]\n";
+   }
+   print "\n";  
+   $fileCount++;
+}
+
+
+
+
+
+
+

@@ -1,0 +1,278 @@
+#!/usr/bin/perl
+
+use Math::MatrixReal; 
+
+#####perl script to break up an etj file into little 'neighbourhoods' size as a hard-coded argument, usually 13 including the centre.
+
+
+$cluster_size= 13;
+
+$coord_width = 13;
+$angle_width = 12;
+
+$outLine="";
+$countInLine=0;
+$atomCount  =0;
+$outCount   =0;
+$frameCount =0;
+
+##get lines from stdin or from a filename passed at the command line
+GET_LINE: while($line = <>) {
+
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {  @asArray = split(/\s+/, $line);
+
+        if( $asArray[0] =~ /Number/ ) {
+            print "#".$asArray[1]." ";
+            $atomsInFrame = $asArray[1];
+        }
+        elsif(  $asArray[0] =~ /Boxx/ ) {
+            print $asArray[1]." ";
+            $box[0] = $asArray[1];
+        }
+        elsif(  $asArray[0] =~ /Boxy/ ) {
+            print $asArray[1]." ";
+            $box[1] = $asArray[1];
+        }
+        elsif(  $asArray[0] =~ /Boxz/ ) {
+            print $asArray[1]."\n";
+            $box[2] = $asArray[1];
+        }
+	    next GET_LINE;
+    }
+    
+    ##parse out coords and orientations
+    $R[$atomCount][0] = substr($line, 0,                  $coord_width );
+    $R[$atomCount][1] = substr($line, $coord_width,     $coord_width );
+    $R[$atomCount][2] = substr($line, 2 * $coord_width, $coord_width );
+
+    $M[$atomCount][0] = substr($line, 3 * $coord_width,  $angle_width );
+    $M[$atomCount][1] = substr($line, 3 * $coord_width + $angle_width,     $angle_width );
+    $M[$atomCount][2] = substr($line, 3 * $coord_width + 2 * $angle_width, $angle_width );
+    
+    $atomCount++;
+
+    if( $atomCount == $atomsInFrame ) {
+
+        print stderr "read $atomCount of $atomsInFrame \n";
+
+        for( $a = 0; $a < $atomsInFrame; $a++ ){
+
+            for( $n = 0; $n < $cluster_size; $n++ ) {
+                $nearest_r[$n] = 9e9;
+                $nearest_i[$n] = 99;
+            }
+
+            #locate the nearest atoms
+ATOM:       for( $b = 0; $b < $atomsInFrame; $b++ ){
+
+                ##find distance including box wrap
+                $r2 = 0.0;
+                for( $i = 0; $i < 3; $i++ ){
+                    $x   = $R[$a][$i] - $R[$b][$i];
+                    if( $x > $box[$i] * 0.5 ){
+                        $x -= $box[$i];
+                    } elsif( $x < $box[$i] * -0.5 ) {
+                        $x += $box[$i];
+                    }
+                    $r2 += ( $x * $x );
+                }            
+
+                #insert to neighbour list if it belongs there
+                for( $n = 0; $n < $cluster_size; $n++ ) {
+                    if( $r2 < $nearest_r[$n] ){
+                       for( $m = $cluster_size - 1; $m > $n; $m-- ){
+                            $nearest_r[$m] = $nearest_r[$m - 1];
+                            $nearest_i[$m] = $nearest_i[$m - 1];
+                       }
+                       $nearest_r[$n] = $r2;
+                       $nearest_i[$n] = $b;
+     
+                       next ATOM;
+                    }
+                }
+            }
+
+
+            #re-sort the cluster - minimum translation from zeroth cluster is as good 
+            # a metric as I can think of.
+    #        if( $frameCount == 0 ){
+    #            for( $n = 0; $n < $cluster_size; $n++ ) {
+    #                   $start_r[$n] = $nearest_r[$n];
+    #                   $start_i[$n] = $nearest_i[$n];
+    #                    for( $i = 0; $i < 3; $i++ ){
+    #                        $start_R[$n][$i] =  $R[$nearest_i[$n]][$i]
+    #                    }
+    #            }
+    #        } else{
+    #            for( $n = 0; $n < $cluster_size; $n++ ) {
+
+    #                $rBest = 9e9;
+    #                $iBest = 99;
+    #                
+    #                for( $m = 0; $m < $cluster_size; $m++ ) {
+    #                    $r = 0.0
+    #                    for( $i = 0; $i < 3; $i++ ){
+    #                        
+    #                    }
+    #                }
+    #           }
+    #       }
+
+
+
+            #write the little cluster out as a `framelet'
+            for( $n = 0; $n < $cluster_size; $n++ ) {
+            
+                $c = $nearest_i[$n];
+                for( $i = 0; $i < 3; $i++ ){
+                    
+                    ##compensate for wrap again
+                    $x   = $R[$c][$i] - $R[$nearest_i[0]][$i];
+                    if( $x > $box[$i] * 0.5 ){
+                        $x -= $box[$i];
+                    } elsif( $x < $box[$i] * -0.5 ) {
+                        $x += $box[$i];
+                    }
+        
+                    $out[$n][$i] = $x;
+                }
+            }
+
+            #centre the object on COM
+            $centre[0]=0.0;
+            $centre[1]=0.0;
+            $centre[2]=0.0;
+            for( $n = 0; $n < $cluster_size; $n++ ){
+                for( $i = 0; $i < 3; $i++ ){
+                    $centre[$i] += $out[$n][$i]; 
+                }
+            } 
+            $centre[0] /= $cluster_size; 
+            $centre[1] /= $cluster_size; 
+            $centre[2] /= $cluster_size; 
+            for( $n = 0; $n < $cluster_size; $n++ ){
+                for( $i = 0; $i < 3; $i++ ){
+                    $out[$n][$i] -= $centre[$i];
+                }
+            } 
+                        
+            #find inertial tensor
+            $I[0][0] = 0.0;
+            $I[1][1] = 0.0;
+            $I[2][2] = 0.0;
+            $I[0][1] = 0.0;
+            $I[0][2] = 0.0;
+            $I[1][2] = 0.0;
+            for( $n = 0; $n < $cluster_size; $n++ ){
+                $I[0][0] += ( $out[$n][1]**2 + $out[$n][2]**2 );
+                $I[1][1] += ( $out[$n][0]**2 + $out[$n][2]**2 );
+                $I[2][2] += ( $out[$n][0]**2 + $out[$n][1]**2 );
+                 
+                $I[0][1] -= ( $out[$n][0] * $out[$n][1] ); 
+                $I[0][2] -= ( $out[$n][0] * $out[$n][2] ); 
+                $I[1][2] -= ( $out[$n][1] * $out[$n][2] ); 
+                
+            }
+            $I[1][0] = $I[0][1];
+            $I[2][0] = $I[0][2];
+            $I[2][1] = $I[1][2];
+            
+            #diagonalise it
+            $Imatrix = new Math::MatrixReal( 3, 3);
+            $Imatrix = $Imatrix->new_from_rows( [$I[0][0], $I[0][1], $I[0][2]], 
+                                                   [$I[1][0], $I[1][1], $I[1][2]],
+                                                   [$I[2][0], $I[2][1], $I[2][2]] );
+            print $Imatrix;
+
+            ($evals, $evecs) = $Imatrix->sym_diagonalise();
+
+            print $evals;
+            print $evecs;
+        
+            exit;
+
+            #align the principal axes of the cluster to the cartesian axes
+            
+
+
+
+
+
+
+            for( $n = 0; $n < $cluster_size; $n++ ){
+                for( $i = 0; $i < 3; $i++ ){
+
+                    #truncate to three decimal places
+                    $x = sprintf("%4.3f", $out[$n][$i]);
+                    
+                  
+                    #add leading spaces to generate fixed-width field
+                    $x = pad( $x, 8);
+                    $outLine = $outLine.$x;
+                    $countInLine++;
+                    if( $countInLine == 10 ){
+                        print $outLine."\n";
+                        $outLine     = "";
+                        $countInLine = 0;
+                    }
+
+                    #truncate to three decimal places
+                    #$x = sprintf("%4.3f", $M[$a][$i]);
+
+                    #add leading spaces to generate fixed-width field
+                    #$x = pad( $x, 8);
+                    #$outLine = $outLine.$x;
+                    #$countInLine++;
+                    #if( $countInLine == 10 ){
+                    #    print $outLine."\n";
+                    #    $outLine     = "";
+                    #    $countInLine = 0;
+                    #}
+                }
+            }
+
+            #end of framelet
+            if( $countInLine != 0 ){
+                print $outLine."\n";
+                $outLine     = "";
+                $countInLine = 0;
+            }
+        }
+        $atomCount = 0;
+    }
+
+
+}
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+	$in = " ".$in;
+    }
+
+    return( $in );
+}
+
+##function to strip a string with leading spaces
+sub spstrip{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) > 0 ){
+	if( $in[0] == ' ' )
+        {
+	    $in = substr($in, 1, length( $in ) );
+	}
+	else
+	{
+	    return( $in );
+	}
+    }
+
+    return( $in );
+}

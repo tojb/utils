@@ -1,0 +1,31 @@
+#!/usr/bin/perl
+
+$coord_width = 13;
+$angle_width = 12;
+
+$atomCount = 1;
+
+##get lines from stdin or from a filename passed at the command line
+GET_LINE: while($line = <>) {
+
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {
+	next GET_LINE;
+    }
+        
+    ##parse out coords and orientations
+    $R[0] = substr($line, 0,                $coord_width );
+    $R[1] = substr($line, $coord_width,     $coord_width );
+    $R[2] = substr($line, 2 * $coord_width, $coord_width );
+
+    $M[0] = substr($line, 3 * $coord_width,  $angle_width );
+    $M[1] = substr($line, 3 * $coord_width + $angle_width,     $angle_width );
+    $M[2] = substr($line, 3 * $coord_width + 2 * $angle_width, $angle_width );
+    
+    ##print out chime-format atom records
+    ##format is: x,y,z        vx,vy,vz,     p,q,r          vp,vq,vr     label    type-tag
+    print "$atomCount $R[0] $R[1] $R[2]\n";
+
+    $atomCount++;
+}

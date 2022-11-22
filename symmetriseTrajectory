@@ -1,0 +1,69 @@
+#!/usr/bin/prl
+
+#accept if passed in as arguments.
+if( scalar ( @ARGV ) == 3 )
+{
+	$inTrajName      = shift;
+	$nAtoms          = shift;
+	$symmetry        = shift;
+	
+}
+else
+{
+	print "symmetriseTrajectory: args are crd file (.x); number of atoms, and the symmetry. \n Rewrites the file as a longer trajectory for one species rather than a short trajectory for one or more identical species.\n"
+
+}
+
+##############################################
+#
+open( my $inTraj, $inTrajName )   or die "Couldn't read $inTrajName: $!";
+
+
+#number of atoms in a symmetry unit
+$splitEvery = $nAtoms / $symmetry;
+
+#number processed in this symmetry section
+$atomCount  = 0;
+
+#number of the section being processed in this frame;
+$sectionCount = 1;
+
+#clumsy chug of the first line of the traj file.
+$input = <$inTraj>;
+print $input;
+
+#the actual loop
+while( $input =  <$inTraj>) 	 
+{
+	@inList = split( /s+/, $input );
+
+	$length = scalar( @inList );
+
+	$atomCount += $length;
+	
+	if( $atomCount <= $splitEvery )
+	{
+		print $input; #pass the line unchanged.
+	}
+	elsif( $sectionCount < $symmetry )	
+	{
+		$atomCount -= $length;
+		$my $i = 0;
+		for( ; $atomCount < $splitEvery; $atomCount++ )
+		{
+			print $inList[$i++]."   ";
+		}
+		print "\n";
+
+		#start a new symmetry section
+		$atomCount = 0;
+		$sectionCount++;
+	}
+
+
+
+}
+
+#we have exhausted the trajectory file
+close( $inTraj );
+

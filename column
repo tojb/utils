@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+#perl script to get a column from a file
+
+
+
+#get arguments
+if( scalar ( @ARGV ) < 2 )
+{
+	die "requires minimum 2 arguments:column <column number> <filename>  .\n";
+}
+
+#get first argument
+$colNo = shift;
+
+#loop over each file passed in.
+while( @ARGV >= 1 )
+{
+
+$fileName = shift;
+
+#open file
+open( my $in,   $fileName )    or die "Couldn't read $fileName: $!";
+
+
+#read the file into an array
+while ( $input = <$in> ) 
+{
+	@inList = split( /\s+/, $input );
+
+	print $inList[$colNo]."\n";
+
+
+}
+
+
+close $in;
+
+
+}

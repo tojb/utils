@@ -1,0 +1,411 @@
+#!/usr/bin/perl
+
+
+#
+#
+# Perl script to produce a pdb file colored by lindemann's index (aprime by nearest neighbours). 
+#
+#
+#
+
+
+if( scalar ( @ARGV ) != 2 )
+{
+	die "requires minimum 2 arguments: .x file, pdb file which serves a topology";
+}
+
+$trajFileName = shift;
+$maskFileName = shift;
+$nAtoms       = shift;
+
+#open the files
+open( my $inTraj,  $trajFileName )    or die "Couldn't read $trajFileName: $!";
+open( my $inMask,  $maskFileName )    or die "Couldn't read $maskFileName: $!";
+
+
+#parse the mask
+$i = 0;
+while( $inLine = <$inMask> )
+{
+    @inList = split ( /\s+/, $inLine );
+
+    if( $inList[0] eq 'ATOM' )
+    {
+	$atNo[$i++] = $inList[1];
+    }
+}
+close $inMask;
+$nAtoms = $i;
+
+print "Natoms: $nAtoms\n";
+
+
+#####parse the traj
+$frameCount = 0;
+@atQueue    = ();
+
+#chug the first line
+$inLine = <$inTraj>;
+while( 0 != readFrame( $inTraj, \@frame, $nAtoms ) )
+{
+    for( $i = 0; $i < $nAtoms; $i++ )
+    {
+	$avg[$i][0] += $frame[$i][0];
+	$avg[$i][1] += $frame[$i][1];
+	$avg[$i][2] += $frame[$i][2];
+    }
+    $frameCount++;
+
+}
+print "read $frameCount frames\n";
+
+#get the mean
+for( $i = 0; $i < $nAtoms; $i++ )
+{
+    $avg[$i][0] /= $frameCount;
+    $avg[$i][1] /= $frameCount;
+    $avg[$i][2] /= $frameCount;
+}
+close $inTraj;
+
+####get the 4 nearest non-bonded heavy atom neighbours to each atom: returns an nAtomsX4 integer array.
+nearNonNeigh( $maskFileName, \@avg, \@nearNeigh );   
+print "built nearest neighbour list\n";
+
+
+####now get the average position for each atom relative to the (instantaneous) COM of the NNNs
+open( $inTraj,  $trajFileName )    or die "Couldn't read $trajFileName: $!";
+$inLine = <$inTraj>;
+for( $i = 0; $i < $nAtoms; $i++ )
+{
+    $avg[$i][0] = 0.0;
+    $avg[$i][1] = 0.0;
+    $avg[$i][2] = 0.0;
+}
+while( 0 != readFrame( $inTraj, \@frame, $nAtoms ) )
+{
+    #get local origins for each atom, based on neighbour positions
+    getCOM( \@nearNeigh, \@frame, \@COM, $nAtoms );
+
+    for( $i = 0; $i < $nAtoms; $i++ )
+    {
+	$avg[$i][0] += $frame[$i][0] - $COM[$i][0];
+	$avg[$i][1] += $frame[$i][1] - $COM[$i][1];
+	$avg[$i][2] += $frame[$i][2] - $COM[$i][2];
+    }
+    $frameCount++;
+
+}
+for( $i = 0; $i < $nAtoms; $i++ )
+{
+    $avg[$i][0] /= $frameCount;
+    $avg[$i][1] /= $frameCount;
+    $avg[$i][2] /= $frameCount;
+}
+close $inTraj;
+print "found average positions relative to neighbours\n";
+
+
+#now get the rmsd
+open( my $inTraj,  $trajFileName )    or die "Couldn't read $trajFileName: $!";
+$inLine = <$inTraj>;
+while( readFrame( $inTraj, \@frame, $nAtoms ) != 0 )
+{
+    #get local origins for each atom, based on neighbour positions
+    getCOM( \@nearNeigh, \@frame, \@COM, $nAtoms );
+
+    for( $i = 0; $i < $nAtoms; $i++ )
+    {
+	$rms[$i] += (($frame[$i][0] - $COM[$i][0]) - $avg[$i][0])**2;
+	$rms[$i] += (($frame[$i][1] - $COM[$i][1]) - $avg[$i][1])**2;
+	$rms[$i] += (($frame[$i][2] - $COM[$i][2]) - $avg[$i][2])**2;
+    }
+    $frameCount++;
+}
+#reduce
+for( $i = 0; $i < $nAtoms; $i++ )
+{
+    $rms[$i] = sqrt($rms[$i] / $frameCount) / 4.5;
+}
+close $inTraj;
+
+###ouput
+printPdb( $maskFileName, \@avg, \@rms );
+
+
+###get "centre-of-mass" vectors for each of the four neirest neighbours
+sub getCOM
+{
+    my $pt_NNN   = shift;
+    my $pt_frame = shift;
+    my $pt_COM   = shift;
+    my $nAtoms   = shift;
+    
+
+    for( my $i = 0; $i < $nAtoms; $i++ )
+    {
+	$pt_COM->[$i][0] = 0.0;
+	$pt_COM->[$i][1] = 0.0;
+	$pt_COM->[$i][2] = 0.0;
+
+	for( my $n = 0; $n < 4; $n++ )
+	{
+	    $pt_COM->[$i][0] +=  $pt_frame->[$pt_NNN->[$i][$n]][0];
+	    $pt_COM->[$i][1] +=  $pt_frame->[$pt_NNN->[$i][$n]][1];
+	    $pt_COM->[$i][2] +=  $pt_frame->[$pt_NNN->[$i][$n]][2];
+	}
+	
+	$pt_COM->[$i][0] /= 4.0;
+	$pt_COM->[$i][1] /= 4.0;
+	$pt_COM->[$i][2] /= 4.0;
+
+    }
+}
+
+
+#####subrouting to find 4 nearest nonbonded neighbours. 
+######Returns an array of four ints per atom, the indices of the neighbours
+sub nearNonNeigh
+{
+    my $maskFileName    = shift;
+    my $pt_avgCrds      = shift;
+    my $pt_neighbours   = shift;
+    
+    
+    my @atNo=();
+    my @resNo=();
+    my @atName=();
+    my $nearest     = -1.0;
+    my $meanNearest =  0.0;
+    my $nearestCount = 0;
+
+    #open the file
+    open( my $inMask,  $maskFileName )    or die "Couldn't read $maskFileName: $!";
+
+    #parse the mask
+    my $i = 0;
+    while( my $inLine = <$inMask> )
+    {
+	my @inList = split ( /\s+/, $inLine );
+
+	if( $inList[0] eq 'ATOM' )
+	{
+	    $atNo[$i]    = $inList[1];
+	    $atName[$i]  = $inList[2];
+	    $resNo[$i]   = $inList[4];
+
+	    $i++;
+	}
+    }
+    close $inMask;
+
+
+    my $nAtoms = $i;
+    ATOM: for( $i = 0; $i < $nAtoms; $i++ )
+    {
+	if( isH( $atName[$i] ) )
+	{
+	     next ATOM;
+	}
+
+	#we need the four nearest neighbours to define a point in 3space
+	for( my $n = 0; $n < 4; $n++ )
+	{  
+
+	    my $j           =  0;
+	    $nearest     = -1.0;
+	    $meanNearest =  0.0;
+	    $nearestCount = 0;
+
+    NEIGHBOUR:while( $j++ < $nAtoms )
+	    {
+		#jump out of the loop if we have this atom already
+		for( my $m = 0; $m < $n; $m++ )
+		{
+		    if( $j == $pt_nearest->[$i][$m] )
+		    {
+			next NEIGHBOUR;
+		    }
+		}
+		##also reject hydrogen atoms
+		if( isH( $atName[$j] ) )
+		{
+		    next NEIGHBOUR;
+		}
+		##also reject atoms in the same residue
+		if( $resNo[$j] == $resNo[$i] )
+		{
+		    next NEIGHBOUR;
+		}
+		##also reject atoms in the next-door residue
+		if( $resNo[$j] == ( $resNo[$i] - 1 ) || $resNo[$j] == ( $resNo[$i] + 1 ) )
+		{
+		    if( isBB( $atName[$j] ) )
+		    {
+			next NEIGHBOUR;
+		    }
+		}
+
+		my $distance = pythagoras(  \$pt_avgCrds->[$i], \$pt_avgCrds->[$j] );
+		if( $distance < $nearest || $nearest < 0.0 )
+		{
+		    $nearest         = $distance;
+		    $pt_nearest->[$i][$n] = $j;
+		}
+
+	    }
+	    $meanNearest  += $nearest;
+	    $nearestCount++;
+
+    #print "Aprime $i:  $resNo[$i] $atName[$i] --- $resNo[$nearestAtom[$i]] $atName[$nearestAtom[$i]]-- $nearest  \n";
+
+        }
+    }
+    
+    my $aPrime = $meanNearest / $nearestCount;
+    return( $aPrime );##this value is not exact, only for interest at this stage
+
+}
+
+sub pythagoras {
+
+    my $x = shift;
+    my $y = shift;
+
+    my @xray = $$x; 
+    my @yray = $$y; 
+
+    my $r = ($xray[0][0] - $yray[0][0])**2 + ($xray[0][1] - $yray[0][1])**2 + ($xray[0][2] - $yray[0][2])**2;
+
+    $r = sqrt( $r );
+
+    return( $r );
+}
+
+sub isH {
+    my $name = shift;
+
+    if( $name =~ /H/ )
+    {
+	if( $name eq 'OH' )
+	{
+	    return( 0 );
+	}
+	return( 1 );
+    }
+    else
+    {
+	return( 0 );
+    }
+}
+
+sub isBB {
+    my $name = shift;
+
+    if( $name eq 'C' || $name eq 'CA' ||  $name eq 'O' || $name eq 'N' || $name eq 'H' )
+    {
+	return( 1 );
+    }
+    else
+    {
+	return( 0 );
+    }
+
+}
+#
+# subroutine to change the coords in a pdb file
+#
+# takes arguments filename, avg coordinates for the atoms, rmsds (to go in the 'occupancy' field of the pdb). 
+#
+#
+sub printPdb
+{
+    my $maskFileName = shift;
+    my $avg = shift;
+    my $rms = shift;
+    
+    open( my $inMask,  $maskFileName )    or die "Couldn't read $maskFileName: $!";
+    
+    open( my $linFile, ">lindemanns.pdb" )  or die "Couldn't open out pdb $!";
+    
+    my $i = 0;
+    while( my $inLine = <$inMask> )
+    {
+	if( $inLine =~ /ATOM/ )
+	{
+	    $newX = padStr( sprintf("%5.3f",$avg->[$i][0]), 8 );
+	    $newY = padStr( sprintf("%5.3f",$avg->[$i][1]), 8 );
+	    $newZ = padStr( sprintf("%5.3f",$avg->[$i][2]), 8 );
+	    $newR = padStr( sprintf("%5.2f",$rms->[$i]), 5   );
+	    
+    
+	    substr( $inLine, 30, 8, $newX );
+	    substr( $inLine, 38, 8, $newY );
+	    substr( $inLine, 46, 8, $newZ );
+	    substr( $inLine, 55, 5, $newR );
+	    
+	    print $linFile $inLine;
+    
+	    $i++;
+    
+	}
+
+    }
+    close $inMask;
+
+}
+
+#
+# 
+#  Short function to add 'stringLength' leading spaces to a string 'number'
+#
+sub padStr
+{
+    my $number       = shift;
+    my $stringLength = shift;
+
+    while( length( $number ) < $stringLength )
+    {
+
+	$number = ' '.$number;
+    }
+
+    return( $number );
+}
+
+sub readFrame{
+
+    my $inTraj   = shift;
+    my $pt_frame = shift;
+    my $nAtoms   = shift;
+ 
+    my $atIndex     = 0;
+    my $crdIndex    = 0;
+
+    while( my $inLine = <$inTraj> )
+    {
+	my $numEntries = length( $inLine );
+	my $lineIndex  = 0;
+
+	while( $lineIndex <= $numEntries - 8 )
+	{
+	    #print "$numEntries...$lineIndex\n";
+	    $pt_frame->[$atIndex][$crdIndex++] = substr( $inLine, $lineIndex,  8);
+	    if( $crdIndex == 3)
+	    {
+		$crdIndex = 0;
+		$atIndex++;
+		if( $atIndex == $nAtoms )
+		{
+		    return( 1 );
+		}
+	    }
+ 
+	    $lineIndex += 8;
+	}
+    }
+    
+    return( 0 );
+
+}
+

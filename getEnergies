@@ -1,0 +1,309 @@
+#!/usr/bin/perl
+#perl script to get various energy values out of a sander dump file.
+
+#get argument
+if( scalar ( @ARGV ) < 1 )
+{
+    print  "requires minimum 1 argument: filename of a sander .out file.\n";
+   die "can have options: getEnergies [-tstart TIMEPS] [-tstop TIMEPS] file file file file file.\n";
+}
+
+
+
+open( my $eTotFile, ">",      "eTot.dat"); 
+open( my $EKFile,  ">",       "EK.dat"); 
+open( my $EPFile,  ">",       "EP.dat"); 
+open( my $bondFile, ">",      "bond.dat"); 
+open( my $angleFile, ">",     "angle.dat" ); 
+open( my $dihedFile, ">",     "dihed.dat"); 
+open( my $vdwFile,   ">",     "vdw.dat"); 
+open( my $eelecFile, ">",     "eelec.dat"); 
+open( my $egbFile,   ">",     "egb.dat"); 
+
+open( my $allFile,   ">",     "energies.txt"); 
+
+#header line for the master file, we want it csv parsable for oorifice
+print $allFile "#time eTot EK EP bond angle dihed vdw 1-4vdw eelec+egb 1-4EE surf\n";
+
+my $minTime = 0;
+my $startTime = 0;
+my $stopTime = 0;
+my $i = 0;
+#loop over each file passed in.
+FILE: while( @ARGV >= 1 )
+{
+
+$fileName = shift;
+
+if( $fileName eq "-tstart" )
+{
+    #have been passed a command line option! w007! 
+    $startTime = shift;
+    $fileName  = shift;
+}
+if( $fileName eq "-tstop" )
+{
+    #have been passed a command line option! time to stop reading stuff in, 
+    #in ps. 
+    $stopTime  = shift;
+    $fileName  = shift;
+}
+
+
+
+
+
+
+#open file
+open( my $in,   $fileName )    or die "Couldn't read $fileName: $!";
+
+
+
+#Etot values should form an unbroken series, starting from the first one.
+my $gotFirst = 0;
+my $sinceHit = 0;
+
+
+#read the file into an array
+while ( $input = <$in> ) 
+{
+       #we need to skip averages and rms
+       if( $input =~ /\s+A\sV\sE\sR\sA\sG\sE\sS(.+)/ )
+       {
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+       }  
+       if( $input =~ /\s+R\sM\sS\s+F\sL\sU\sC(.+)/ )
+       {
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+	   $input = <$in>;
+       }    
+
+        #new block of data
+       if( ( $input =~ /NSTEP\s+=\s+(\S+)\s+TIME\S+\s+=\s+(\S+)(.+)/ ) 
+	|| ( $input =~ /NSTEP\s+ENERGY\s+RMS\s+GMAX\s+NAME\s+NUMBER/ ))
+       {
+	   if( $input =~ /NSTEP\s+=\s+(\S+)\s+TIME\S+\s+=\s+(\S+)(.+)/ ) #match mdrun header
+	{
+
+	    $gotFirst = 1;
+	    $sinceHit = 0;
+	    
+            $time   =  $2;
+	    $time  += $minTime;
+	    
+
+	       #check for Etots.
+	       $input = <$in>;
+               if( $input =~ /Etot\s+=\s+(\S+)\s+EKtot\s+=\s+(\S+)(.+)/ )
+	       {
+
+		$eTot =  $1;
+		$EK   =  $2;
+
+                #break it down in steps, my head hurts.
+		$bigvdw = $3;
+		@list = split( /\s+/, $bigvdw );
+
+		$EP   =  $list[3];
+		
+	        }
+
+		$input = <$in>;
+		if( $input =~ /BOND\s+=\s+(\S+)\s+ANGLE\s+=\s+(\S+)\s+(.+)/ )
+		{
+		    $bond  = $1;
+		    $angle = $2;
+		   
+		    #break it down in steps, my head hurts.
+		    $bigvdw = $3;
+		    @list = split( /\s+/, $bigvdw );
+		    $dihed   =  $list[2]; 
+		    
+		}
+		else
+		{
+		    die "trouble with this line: $input";
+		}
+
+		$input = <$in>;
+		if( $input =~ /\S+\s+NB\s+=\s+(\S+)\s+\S+\s+EEL\s+=\s+(\S+)\s+(.+)/ )
+		{
+		    #break it down in steps, my head hurts.
+		    $one_fourvdw   = $1;
+		    $one_foureelec = $2;
+		    $bigvdw   = $3;
+		    @list = split( /\s+/, $bigvdw );
+
+		    $vdw = $list[2];
+		}
+		else
+		{
+		    die "trouble with this line: $input";
+		}
+		
+		$input = <$in>;
+		if( $input =~ /EELEC\s+=\s+(\S+)\s+EGB\s+=\s+(\S+)\s+RESTRAINT\s+=\s+(S+)*/ )
+		{
+		    $eelec  = $1;
+		    $egb    = $2;
+		}
+		else
+		{
+
+                    if( $input =~ /EELEC\s+=\s+(\S+)\s+.+/ )
+	            {
+                    $eelec  = $1;
+                    }else{
+		    	die "trouble with this line: $input";
+                    }
+		}
+		$input = <$in>;
+		if( $input =~ /ESURF=\s+(\S+)*/ )
+		{
+		    $esurf  = $1;
+		}
+
+	
+
+
+	}
+	elsif( $input =~ /NSTEP\s+ENERGY\s+RMS\s+GMAX\s+NAME\s+NUMBER/ ) #minimisation entry  header
+	{
+	     $input = <$in>;
+	     @inList = split( /\s+/, $input);
+	     
+	     $gotFirst = 1;
+	     $sinceHit = 0;
+	    
+	     $time   =  $inList[1] * 0.002;#arbitrary timescale to match 2fs dynamics steps
+	     $eTot   = 	$inList[2];
+	     $EK     =  0;
+	     $EP     =  $eTot;
+
+	     $input = <$in>; #chug an empty line
+	     
+	     $input = <$in>;
+	     @inList = split( /\s+/, $input);
+	     $bond   = $inList[3];
+	     $angle  = $inList[6];
+	     $dihed  = $inList[9];
+	     
+	     $input = <$in>;
+	     @inList = split( /\s+/, $input);
+	     $vdw    = $inList[3];
+	     $eelec  = $inList[6];
+	     $egb    = $inList[9];
+	     
+	     $input = <$in>;
+	     @inList = split( /\s+/, $input);
+	     $one_fourvdw    = $inList[4];
+	     $one_foureelec  = $inList[8];
+	     #$restraint      = $inList[8];
+	     
+	     $input  = <$in>;
+	     @inList = split( /\s+/, $input);
+	     $esurf  = $inList[3];
+	     $input  = <$in>;
+	     @inList = split( /\s+/, $input);
+	     #$eamber = $inList[2];
+	     
+	     $minTime = $time;
+
+
+	}
+
+      
+	if(( $time >= $startTime ) 
+	   && ( $stopTime == 0 || $time <= $stopTime ) )
+	{
+        
+	    $total[0] += $eTot;
+	    $total[1] += $EK;
+	    $total[2] += $EP;
+	    $total[3] += $bond;
+	    $total[4] += $angle;
+	    $total[5] += $dihed;
+	    $total[6] += $vdw + $one_fourvdw;
+	    $total[7] += $eelec + $one_foureelec; 
+	    $total[8] += $egb;
+	    $total[9] += $esurf;
+
+
+	    $i++;
+	    
+
+	    print $eTotFile  "$time $eTot \n";
+	    print $EKFile    "$time $EK \n";
+	    print $EPFile    "$time $EP \n";
+	    print $bondFile  "$time $bond \n";
+	    print $angleFile "$time $angle \n";
+	    print $dihedFile "$time $dihed \n";
+	    print $vdwFile   "$time $vdw \n";
+	    print $eelecFile "$time $eelec \n";
+	    print $egbFile   "$time $egb \n";
+		
+	    
+
+	    print $allFile "$time $eTot $EK $EP $bond $angle $dihed $vdw $one_fourvdw $eelec $one_foureelec $esurf\n";
+	}
+ 
+	}   
+
+
+
+
+
+
+	elsif( $input =~ /KE\sTrans\s*/ )
+	{
+	        #allow for the occasional extra bit of info
+	        $sinceHit = 0;
+	}
+	else 
+	{
+		$sinceHit++;
+		
+	}
+}
+
+
+
+			close $in;
+			next FILE;
+
+}
+close  $eTotFile   ;
+close  $EKFile  ;
+close  $EPFile   ;
+close  $bondFile  ;
+close  $angleFile  ;
+close  $dihedFile  ;
+close  $vdwFile  ;
+close  $eelecFile  ;
+close  $egbFile  ;
+close  $allFile ;	
+	
+print "eTot:  ".$total[0]/ $i."\n";
+print "ek:    ".$total[1]/ $i."\n";
+print "ep:    ".$total[2]/ $i."\n";
+print "bond:  ".$total[3]/ $i."\n";
+print "angle: ".$total[4]/ $i."\n";
+print "dihed: ".$total[5]/ $i."\n";
+print "vdw:   ".$total[6]/ $i."\n";
+print "eelec: ".$total[7]/ $i."\n";
+print "egb:   ".$total[8]/ $i."\n";
+print "esurf: ".$total[9]/ $i."\n";
+print "\n\nBond+Angle+Dihed: ".($total[3] + $total[4] + $total[5])/ $i."\n";
+print "elec+egb: ".($total[7] + $total[8])/ $i."\n";
+

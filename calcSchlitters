@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+#perl script to apply schlitter formula to a list of numbers
+
+my $i = 0;
+#temperature
+$T = 300;
+
+#Boltzmann constant:
+$k_B = 1.3806503e-23;
+
+#base of natural logs
+$e = 2.71828183;
+
+#Plank's constant
+$hbar = 1.05457148e-34;
+
+#Avogadro's number
+$N = 6.02214199e23;
+
+#get argument
+if( scalar ( @ARGV ) != 1 )
+{
+	die "requires a single argument: filename of a file with some numbers in it.\n";
+}
+$fileName = shift;
+
+#open file
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#initialise number array
+@inlist = ();
+
+#this $| variable is a system switch to turn off print and file buffering.
+$| = 1;
+#hot pipes!
+
+
+print "reading data. May take some time \n";
+
+
+#read the file into an array
+while ( $input = <$in> ) 
+{
+	#check for multiple values per line
+	if( $input =~ /(.+)(\s)(.+)/ )
+	{
+		@splitted = split( "\s+", $input );
+		@inlist = ( @inlist , @splitted );
+	}
+	else 
+	{
+		@inlist = ( @inlist, $input ); 
+	}
+
+
+
+}
+
+#calculate the Schlitter formula
+$preMultiplier  = $k_B * $T * $e * $e;
+$preMultiplier /= ( $hbar * $hbar );
+
+TRAJPART: $det = 0;
+while( $i < scalar(  @inlist ) )
+{
+    $det += $inlist[$i];
+    $i++;
+
+    #pca_multi prints out eigenvalues as a sorted list, smallest first.
+    #there are usually quite a few negative values, so the easiest way to tell that a new eval 
+    #set is begun is to look for a switch from  >0 to <0.
+    if( ((  $inlist[$i] < 0 ) && ( $inlist[$i - 1] > 0 ))
+     ||  ( $i >=  scalar(  @inlist ) ) )
+    {
+
+	$det *= $preMultiplier;
+	$det += scalar(  @inlist );
+
+	$S = 0.5 * $k_B * log ( $det );
+
+	print "S = $S Joules per Kelvin\n";
+	print "TS = ".$T*$S." Joules\n";
+
+	$tot = $N * $T * $S / 4184;
+	print "TS = $tot Kilocals per mol\n";
+
+	goto TRAJPART;
+    }
+
+
+} 
+
+
+

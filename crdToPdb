@@ -1,0 +1,200 @@
+#!/usr/bin/perl
+#perl scrip to change a .x file to a string of pdbs
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+
+
+#accept if passed in as arguments.
+if( scalar ( @ARGV ) == 3 )
+{
+	$inPDBName       = shift;
+	$inTrajName      = shift;
+	$outFileStem     = shift;
+	
+
+}
+else
+{
+	print "crdToPdb: args are: input \"template\" pdb file; input crd file; 
+	       output pdb fileStem\n\n";	  
+	die;
+}
+
+
+
+
+
+
+
+##############################################
+#
+#open the files
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+open( my $inTraj, $inTrajName )   or die "Couldn't read $inTrajName: $!";
+
+
+$nLines        = 0;
+$nAtoms        = 0;
+$fileNumber    = 1;
+
+#read the pdb into an array of lines.
+while ( $input = <$inPDB> ) 
+{
+	#push the input onto an array
+ 	@molecule = ( @molecule, $input );	
+   	
+	#count the number of lines in the file
+	$nLines++;
+	
+	#and the number of atoms
+	if( $input =~ "ATOM" )
+   	{
+		$nAtoms++;
+	}
+
+}
+close( $inPDB );
+
+
+print "read $nLines lines with $nAtoms atoms\n";
+
+
+#clumsy skip of the first 2 lines of the traj file.
+$input = <$inTraj>;
+#$input = <$inTraj>;
+
+
+#count appropriate line in the in-pdb file. 
+$pdbLineNo = 0;
+
+#open a new out-pdb file
+$outFileName = $outFileStem.$fileNumber.".pdb";
+open ( my $out, ">", $outFileName ) or die "problems opening $outFileName: $!";
+
+
+#the actual loop
+while( $input =  <$inTraj>) 	 
+{
+
+   @in   = split(/\s+/, $input);
+   ($null, @in ) = @in;
+   	
+   @line = (@line, @in);
+   
+   #how many coords?	
+   $lineSize = scalar( @line );
+       
+
+CRD_VEC:for( $i = 0; ($i+2) < $lineSize ; $i += 3 )	
+   {
+	$x = $line[$i];
+        $y = $line[$i+1];
+        $z = $line[$i+2];
+ 	
+	#trunctate to three decimal places
+	$xTrunc  = sprintf( "%3.3f", $x );
+	$yTrunc  = sprintf( "%3.3f", $y );
+	$zTrunc  = sprintf( "%3.3f", $z );
+	
+	$x = $xTrunc;
+	$y = $yTrunc;
+	$z = $zTrunc;
+
+
+	while( 1 )
+	{
+
+		if( $pdbLineNo <= $nLines )
+		{
+			$pdbLine = $molecule[$pdbLineNo++];
+			
+			if( $pdbLine =~ "ATOM" )
+   			{
+			        
+
+				#match in new coordinates
+				if ( $pdbLine =~ /(ATOM)(\s+\S+\s+\S+\s+\S+\s+\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+\s+\S+)/ )
+				{
+					#depending on the size of the number it eats into 
+					#the leading spaces
+					$xLeadingSpaces = length($4) + length($3) - length($x);
+					if( $xLeadingSpaces <= 0 )
+					{ die "format hassles here 1 \n";}	
+					$xLead = " ";
+					for( my $j = 0; $j < $xLeadingSpaces - 1; $j++)	
+					{$xLead = $xLead." ";}
+
+					$yLeadingSpaces = length($6) + length($5) - length($y);
+					if( $yLeadingSpaces <= 0 )
+					{ die "format hassles here 2 \n";}	
+					$yLead = " ";
+					for( my $j = 0; $j < $yLeadingSpaces - 1; $j++)	
+					{$yLead = $yLead." ";}
+
+					$zLeadingSpaces = length($8) + length($7) - length($z);
+					if( $zLeadingSpaces <= 0 )
+					{ die "format hassles here 3 \n";}	
+					$zLead = " ";
+					for( my $j = 0; $j < $zLeadingSpaces - 1; $j++)	
+					{$zLead = $zLead." ";}
+
+		
+					$pdbLine = "ATOM".$2.$xLead.$x.$yLead.$y.$zLead.$z.$9.$10;
+				
+
+				}
+				else
+				{		
+					die "regexp needs looking at here. !$\n";
+				}
+	
+				print $out $pdbLine."\n";
+			    
+				#break out of the read loop on the pdb
+				next CRD_VEC;
+			    }			
+			    else
+			    {
+				#pass comments etc unchanged
+				print $out $pdbLine;
+			    }
+
+		    }
+	            else
+		    {
+			close $out ;
+			
+                        #count appropriate line in the in-pdb file. 
+                        $pdbLineNo = 0;
+
+                        #open a new out-pdb file
+			$fileNumber++;
+                        $outFileName = $outFileStem.$fileNumber.".pdb";
+                        open ( $out, ">", $outFileName ) or die "problems opening $outFileName: $!";
+			
+		    }
+
+	}
+
+   }
+
+   #shuffle leftover co-ords back into the array.
+   @anotherLine = ();
+   for( ; $i < $lineSize; $i++ )  
+   {
+	@anotherLine = (@anotherLine,$line[$i]);
+   }
+   @line = ();
+   @line = (@anotherLine);
+  
+}
+
+
+#we have exhausted the trajectory file
+print "wrote pdb file: done\n";
+close( $inTraj );
+close( $out );

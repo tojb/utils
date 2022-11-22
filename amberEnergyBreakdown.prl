@@ -1,0 +1,296 @@
+#!/usr/bin/perl
+#perl script to get rid of hydrogens from a pdb file
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#accept if passed in as arguments.
+
+$tstart1 = -1;
+$tstop1  = 100000000;
+$tstart2 = -1;
+$tstop2  = 100000000;
+$lastT   = 0;
+$time    = 0;
+
+if( scalar ( @ARGV )  == 6 )
+{
+    $tstop2  = pop(@ARGV);
+    $tstart2 = pop(@ARGV);
+    $tstop1  = pop(@ARGV);
+    $tstart1 = pop(@ARGV);
+
+    
+}
+if( scalar ( @ARGV ) != 2 )
+{
+        print "parse and compare amber energies\n";
+	print ": requires two arguments, input  data files\n";
+	print "optional third-6th arguments, time (PS) to start/stop processing data.\n";
+
+	die;
+}
+
+@names=("energy",
+	"forcefield",
+	"hbonds",
+	"asp",
+	"pbnp",
+	"pbelec",
+	"gbsp",
+	"kinetic",
+	"esurf",
+	"EE+GB",
+        "bonds",
+        "angles",
+	"ureyb",
+	"dihedrals",
+	"impropers",
+	"vdwaals",
+	"elec",
+	"gbenr");
+
+
+$fileNumber = 0;
+$tstart=$tstart1;
+$tstop=$tstop1;
+
+while(	$inDataName   = shift )
+{
+    
+
+
+##############################################
+#
+#open the file
+open( my $inData,  $inDataName )    or die "Couldn't read $inDataName: $!";
+
+@energy=();
+@forcefield=();
+@hbonds=();
+@asp=();
+@pbnp=();
+@pbelec=();
+@gsbp=();
+@eKinetic=();
+@esurf=();
+@gbPlusEE=();
+@bonds=();
+@angles=();
+@ureyb=();
+@dihedrals=();
+@impropers=();
+@vdwaals=();
+@elec=();
+@gbenr=();
+
+#read through the file by lines.
+$reading = 0;
+if( $tstart == -1 )
+{
+    $reading = 1;
+}
+$lineCount = 0;
+while ( $inLine = <$inData> ) 
+{
+    $lineCount++;
+
+    @lineList = split( /\s+/, $inLine );
+
+    
+    #need to skip these sections, they are not real data.
+    if(( $inLine =~ /A V E R A G E S/ )
+       || ( $inLine =~ /R M S/ ))
+    {
+	while(( $inLine = <$inData> )
+	   && ( ! ($inLine =~ /-------/ ) ))
+	{
+	    $lineCount++;
+	}
+    }
+
+    if( $inLine =~ /TIME.PS. =/ )
+    {
+	$time = $lineList[6];
+
+	if( $time >= $tstart )
+	{
+	    $reading = 1;
+	}
+	if( $time >= $tstop )
+	{
+	    $reading = 0;
+	    $lastT = $time;
+	}
+    }
+if( $reading == 1)
+{
+    #match a pattern to check we have a useful entry
+    if($inLine =~ /Etot/ ) 
+    {
+	push(@energy, $lineList[3]);
+	push(@eKinetic, $lineList[6]);
+    }
+    elsif( $inLine =~ /BOND/ )
+    {
+	push(@bonds,     $lineList[3]);
+	push(@angles,    $lineList[6]);
+	push(@dihedrals, $lineList[9]);
+
+    }
+    elsif( $inLine =~ /VDWAALS/ )
+    {
+
+	push(@vdwaals,   $lineList[11]);
+    
+	#add the 1-4 terms to the "vanilla" terms of the same type.
+	$vdwaals[$#vdwaals] += $lineList[4]; # here "$#array = "most recent"
+	push(@elec,          $lineList[8]);
+	push(@gbPlusEE,      $lineList[8]); #record this twice
+
+	
+    }
+    elsif( $inLine =~ /EELEC/ )
+    {
+	push(@gbenr,     $lineList[6]);
+	$elec[$#elec]          += $lineList[3];
+
+	$gbPlusEE[$#gbPlusEE]  += $lineList[6]; #record electrical PLUS generalised born
+	$gbPlusEE[$#gbPlusEE]  += $lineList[3];
+	
+
+    }
+    elsif( $inLine =~ /ESURF/ )
+    {
+	push(@esurf, $lineList[2]);
+
+	#store the sum of bonds, angles, VDW and torsions.
+	push(@forcefield,  $bonds[$#bonds]+$angles[$#angles]+$dihedrals[$#dihedrals]+$vdwaals[$#vdwaals]);
+
+	if(1 < ($disc = ($energy[$#energy] - 
+	  ( $bonds[$#bonds]         +
+	    $angles[$#angles]       +
+	    $dihedrals[$#dihedrals] +
+	    $vdwaals[$#vdwaals]     +
+	    $elec[$#elec]           +
+	    $esurf[$#esurf]         +
+	    $eKinetic[$#eKinetic]   +
+	    $gbenr[$#gbenr]     ) ))**2)
+	{
+		print "# arrg! discrepancy $disc at line $lineCount file $inDataName\n";
+	}
+	if(( $gbenr[$#gbenr] +  $elec[$#elec]  - $gbPlusEE[$#gbPlusEE] ) > 0.001 )
+	{
+	    print "# aaarg! elec+gb != elecPlusGB line $lineCount file $inDataName\n";
+	    print "#  $gbenr[$#gbenr] +  $elec[$#elec] = $gbPlusEE[$#gbPlusEE] \n";
+	    print "DELTA IS ".($gbenr[$#gbenr] +  $elec[$#elec]  - $gbPlusEE[$#gbPlusEE])."\n";
+
+
+	    print $inLine;
+	}
+	    
+    }
+    
+}
+}
+
+print "# finished $inDataName   at time $time ps\n";
+
+
+$index = 0;
+foreach $listRef ( \@energy, \@forcefield, \@hbonds, \@asp, \@pbnp, \@pbelec , \@gsbp, \@eKinetic, \@esurf, \@gbPlusEE, \@bonds, \@angles, \@ureyb, \@dihedrals, \@impropers, \@vdwaals, \@elec,  \@gbenr )
+{
+    
+    $length = scalar( @$listRef );
+    $N[$index][$fileNumber] = $length;
+    
+
+    $total = 0;
+    foreach my $item ( @$listRef ) 
+    {
+	$total += $item;
+    }
+    if( $length != 0 )
+    {
+	$mean[$index][$fileNumber] = $total / $length;
+    }
+    else
+    {
+	$mean[$index][$fileNumber] = 0;
+    }
+
+
+    $stdErr[$index][$fileNumber] = 0;
+    foreach my $item ( @$listRef ) 
+    {
+	$d = ($item - $mean[$index][$fileNumber])  ;
+	$stdErr[$index][$fileNumber] += ( $d * $d );
+    }
+
+
+
+    #stdErr = stdDev / sqrt N.
+    if( $length == 0)
+    {
+	$stdDev[$index][$fileNumber] = 0;
+	$stdErr[$index][$fileNumber] = 0;
+    }
+    else
+    {
+       #unbiased estimator of pop stddev is Root-squared dev / N-1
+        $stdDev[$index][$fileNumber] = sqrt($stdErr[$index][$fileNumber]);
+	$stdErr[$index][$fileNumber] =      $stdDev[$index][$fileNumber] /  ($length * sqrt( $length ));
+    }
+
+    $index++;
+} 
+
+$fileNumber=1;
+
+
+$tstart=$tstart2;
+$tstop=$tstop2;
+
+
+if( $reading == 0 && $lastT == 0 )
+{
+    print "# $inDataName - did not read\n";
+}
+
+
+}
+
+$outCount = 1;
+for($j = 0; $j < $index; $j++ )
+{
+  #  print "$mean[$j][0]   $mean[$j][1]   $names[$j]\n";
+
+	#difference of means==mean difference
+	$meanDifference = $mean[$j][0]-$mean[$j][1];
+
+	if( ($N[$j][0] * $N[$j][1]) != 0 )
+	{
+	    #get SD for difference with pythagoras-like formula
+	    $variance  =  $stdDev[$j][0]**2 / $N[$j][0];
+	    $variance +=  $stdDev[$j][1]**2 / $N[$j][1];
+	    $SD        =  sqrt( $variance );
+
+	    #stdErr
+	    $SE        =  $SD * sqrt( 1 / $N[$j][0] + 1 / $N[$j][1] );
+	}
+	else
+	{
+	    $SD = 0;
+	    $SE = 0;
+	}
+	
+	if( !( $meanDifference == 0 && $SD == 0 )) #don't bother with null values 
+	{
+	    print  $outCount."  ".$meanDifference."  ".$SD."    $names[$j]\n";
+	    $outCount++;
+	}    
+}

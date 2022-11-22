@@ -1,0 +1,53 @@
+#!/usr/bin/perl
+#perl scrip to insert arbitrary values into PQR files
+#instead of charges: use to make pretty pictures.
+#
+#to run:$ perl -w script.prl 
+#josh.
+
+
+
+############
+#Get params from the command line and scope the bastards.
+############
+
+if( scalar ( @ARGV ) == 2 )
+{
+	($inColoursFile, $inPQRFile) = @ARGV;
+}
+else
+{
+print "args:\n";
+print "incolours, in pdb file\n";
+die;
+}
+
+#open the files
+open( my $inPQR,    $inPQRFile)  or die "Couldn't read $inPQRFile:  $!\n";
+open( my $inColours, $inColoursFile )  or die "Couldn't read $inColoursFile: $!\n";
+
+$colour = <$inColours>;
+
+#######handle files#######
+while ( $line = <$inPQR> ) 
+{
+
+   if ( $line =~ /ATOM\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)*/$colour/ )
+   {
+	print "hit\n";
+	$colour = <$inColours>;
+   }
+	
+   #dump it to stdout.
+   print $line;
+   
+}
+
+#close the files
+close $inPQR;
+close $inColours;
+
+
+
+
+##########################

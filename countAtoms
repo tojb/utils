@@ -1,0 +1,5 @@
+#!/bin/bash 
+
+#script to count atoms in a .x file (per frame).
+
+awk 'NF==10{count++}NF<10{cc++; if(cc==2){print (count * 10 + NF )/3;exit}count=0;}' $1

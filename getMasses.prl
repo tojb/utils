@@ -1,0 +1,218 @@
+#!/usr/bin/perl
+#perl scrip to get the masses from a pdb file
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#
+#$inPDBName       = "/home/josh/xtal/strippedToBackbone.pdb.1"; #initial molecule.
+if( scalar ( @ARGV ) == 1 )
+{
+	$inPDBName       = shift;
+}
+else
+{
+	die "not enough args: require in pdb\n";
+} 
+
+#open the files
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+
+
+#read the pdb into an array of lines.
+while ( $input = <$inPDB> ) 
+{
+	if ( $input =~ /(ATOM)\s+\S+\s+(\S+)*/ )
+	{
+
+		$atomType = $2;
+		
+		if(( $atomType eq "N" )
+		   || ( $atomType eq "ND2" )
+		   || ( $atomType eq "NE2" )
+           || ( $atomType eq "N1" )
+           || ( $atomType eq "N2" )
+           || ( $atomType eq "N3" )
+           || ( $atomType eq "N4" )
+           || ( $atomType eq "N7" )
+           || ( $atomType eq "N9" )
+		   )
+		{
+			$mass = 14;
+		}
+		elsif(( $atomType eq "CA" ) 
+		      || ( $atomType eq "CA" )
+		      || ( $atomType eq "CB" )
+		      || ( $atomType eq "CG" )
+		      || ( $atomType eq "CD" )
+		      || ( $atomType eq "CD1" )
+		      || ( $atomType eq "CD2" )
+		      || ( $atomType eq "CD3" )
+		      || ( $atomType eq "CE" )
+		      || ( $atomType eq "CE1" )
+		      || ( $atomType eq "CE2" )
+		      || ( $atomType eq "CE3" )
+		      || ( $atomType eq "CG1" )
+		      || ( $atomType eq "CG2" )
+              || ( $atomType eq "CH3" )
+		      || ( $atomType eq "CZ" )
+		      || ( $atomType eq "C" )
+		      || ( $atomType eq "C1'" )
+		      || ( $atomType eq "C2" )
+		      || ( $atomType eq "C2'" )
+		      || ( $atomType eq "C3" )
+		      || ( $atomType eq "C3'" )
+              || ( $atomType eq "C4" )
+              || ( $atomType eq "C4'" )
+              || ( $atomType eq "C5" )
+              || ( $atomType eq "C5'" )
+              || ( $atomType eq "C6" )
+              || ( $atomType eq "C7" )
+              || ( $atomType eq "C8" )
+              || ( $atomType eq "C9" )
+              || ( $atomType eq "C10" )
+              || ( $atomType eq "C11" )
+
+	      
+		)
+		{
+			$mass = 12;
+		}
+		elsif(( $atomType eq "O" )
+		      || ( $atomType eq "OXT" )
+		      || ( $atomType eq "OD1" )
+		      || ( $atomType eq "OE1" )
+		      || ( $atomType eq "OE2" )
+                      || ( $atomType eq "OH"  )
+		      || ( $atomType eq "O1P" )
+		      || ( $atomType eq "O2P" )
+		      || ( $atomType eq "O2"  )
+		      || ( $atomType eq "O3"  )
+		      || ( $atomType eq "O3'" )
+		      || ( $atomType eq "O4"  )
+		      || ( $atomType eq "O4'" )
+		      || ( $atomType eq "O5'" )
+		      || ( $atomType eq "O6"  )
+                      || ( $atomType eq "OG"  )
+                      || ( $atomType eq "OG1" )
+		      )
+		{
+			$mass = 16;
+		}
+		elsif( $atomType eq "P")
+                {
+			$mass = 30.97;
+		}
+		elsif( $atomType eq "SG")
+                {
+			$mass = 32;
+		}
+		elsif(( $atomType eq "H" )
+		      || ( $atomType eq "H1" )
+		      || ( $atomType eq "H1'" )
+		      || ( $atomType eq "H2" )
+		      || ( $atomType eq "H2'1" )
+		      || ( $atomType eq "H2'2" )
+		      || ( $atomType eq "H3" )
+		      || ( $atomType eq "H3'" )
+		      || ( $atomType eq "HA" )
+		      || ( $atomType eq "HA2" )
+		      || ( $atomType eq "HA3" )
+		      || ( $atomType eq "2HA" )
+		      || ( $atomType eq "3HA" )
+		      || ( $atomType eq "HB" )
+		      || ( $atomType eq "1HB" )
+		      || ( $atomType eq "2HB" )
+		      || ( $atomType eq "3HB" )
+		      || ( $atomType eq "HB1" )
+		      || ( $atomType eq "HB2" )
+		      || ( $atomType eq "HB3" )
+		      || ( $atomType eq "HG" )
+                      || ( $atomType eq "HG1" )
+		      || ( $atomType eq "1HG1" )
+              || ( $atomType eq "2HG1" )
+              || ( $atomType eq "3HG1" )
+              || ( $atomType eq "1HG2" )
+              || ( $atomType eq "HG12" )
+              || ( $atomType eq "HG13" )
+		      || ( $atomType eq "2HG2" )
+		      || ( $atomType eq "3HG2" )
+              || ( $atomType eq "2HG" )
+		      || ( $atomType eq "3HG" )
+		      || ( $atomType eq "HG2" )
+		      || ( $atomType eq "HG3" )
+		      || ( $atomType eq "HD" )
+		      || ( $atomType eq "1HD" )
+		      || ( $atomType eq "2HD" )
+		      || ( $atomType eq "HD1" )
+		      || ( $atomType eq "HD2" )
+                      || ( $atomType eq "HD11" )
+                      || ( $atomType eq "HD12" )
+                      || ( $atomType eq "HD13" )
+                      || ( $atomType eq "HD21" )
+                      || ( $atomType eq "HD22" )
+                      || ( $atomType eq "HD23" )
+		      || ( $atomType eq "1HD2" )
+		      || ( $atomType eq "2HD2" )
+		      || ( $atomType eq "3HD2" )
+		      || ( $atomType eq "HE" )
+		      || ( $atomType eq "HE1" )
+		      || ( $atomType eq "1HE" )
+		      || ( $atomType eq "2HE" )
+		      || ( $atomType eq "3HE" )
+		      || ( $atomType eq "HE2" )
+                      || ( $atomType eq "HE21" )
+                      || ( $atomType eq "HE22" )
+		      || ( $atomType eq "1HE2" )
+		      || ( $atomType eq "2HE2" )
+		      || ( $atomType eq "3HE2" )
+		      || ( $atomType eq "HH" )
+		      || ( $atomType eq "H4" )
+		      || ( $atomType eq "H4'" )
+              || ( $atomType eq "H5" )
+              || ( $atomType eq "H5'1" )
+              || ( $atomType eq "H5'2" )
+              || ( $atomType eq "H5T" )
+              || ( $atomType eq "H6" )
+              || ( $atomType eq "H7" )
+              || ( $atomType eq "H8" )
+              || ( $atomType eq "H9" )
+              || ( $atomType eq "H10" )
+              || ( $atomType eq "H11" )
+              || ( $atomType eq "H12" )
+              || ( $atomType eq "H13" )
+              || ( $atomType eq "H21" )
+              || ( $atomType eq "H22" )
+		      || ( $atomType eq "HH31" )
+		      || ( $atomType eq "HH32" )
+		      || ( $atomType eq "HH33" )
+		      || ( $atomType eq "H3T" )
+		      || ( $atomType eq "H41" )
+		      || ( $atomType eq "H42" )
+                      || ( $atomType eq "HG21" )
+                      || ( $atomType eq "HG22" )
+                      || ( $atomType eq "HG23" )
+                      || ( $atomType eq "HZ" )
+			)
+		{
+			$mass = 1;
+		}
+			
+
+	
+		else
+		{
+			die "atom $atomType not recognised.\n";
+		}	
+		
+		
+		print $mass."\n";
+
+	}
+		
+}
+

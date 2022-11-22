@@ -1,0 +1,97 @@
+#!/usr/bin/perl
+
+$coord_width   = 13;
+$angle_width   = 12;
+##hang on... this ought to be as big as 2*max coords less 1 for a sign bit
+$boxinfo_width = 11; 
+
+$headerBox_thLine = 5;
+
+
+$atomCount   = 1;
+$storedCount = 0;
+
+$inFileName=shift;
+if( scalar(@ARGV) > 0 ) {
+        $frame=shift;
+}
+else {
+        $frame=0;
+}
+
+open( $inFile, $inFileName ) or die "failed to open file: $inFileName";
+
+##count header size
+while($line = <$inFile>) {
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {
+        $headerEnd = tell( $inFile ); ##save end of header bytes
+        $outFrame[$storedCount++] = $line; ##save the header info
+    }
+    else{
+        last;##start reading frame    
+    }
+}
+
+
+##count frame size
+while($line = <$inFile>) {
+    if( length( $line ) < 3 ) { ##ie is first frame-terminating empty line
+        $line = <$inFile>; ##null
+        $frameEnd = tell( $inFile ); ##end of frame
+        last;
+    }
+}
+$frameSize = $frameEnd - $headerEnd;
+
+##set fp to start of desired frame
+if( $frame == 0 ){ ##last frame in file
+        $offset = -1 * $frameSize;
+        seek( $inFile, $offset, 2 );
+}
+else{
+        seek( $inFile, $headerEnd + ($frame - 1) * ($frameEnd - $headerEnd), SEEK_SET );
+}
+
+##print out the frame
+while($line = <$inFile>) {
+    $outFrame[$storedCount++] = $line;
+    if( length( $line ) < 2 ) {
+        $outFrame[$storedCount++] = "\n";
+        last;
+    }
+}
+
+##set correct box info in the new header
+$boxLine=$outFrame[$storedCount-4];
+
+$boxX = substr($boxLine, 1,                     $boxinfo_width);
+$boxY = substr($boxLine, 1+     $boxinfo_width, $boxinfo_width);
+$boxZ = substr($boxLine, 1+ 2 * $boxinfo_width, $boxinfo_width);
+
+$outFrame[$headerBox_thLine]     ="\#Boxx $boxX\n";
+$outFrame[$headerBox_thLine + 1] ="\#Boxy $boxY\n";
+$outFrame[$headerBox_thLine + 2 ]="\#Boxz $boxZ\n";
+
+##write out the requested frame
+for( my $i = 0; $i < $storedCount; $i++ ) {
+
+        print $outFrame[$i];
+        
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

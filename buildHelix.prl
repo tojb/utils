@@ -1,0 +1,122 @@
+#!/usr/bin/perl
+#perl scrip to change a .x file to a string of pdbs
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# Parameters:
+#
+$pi              = 3.14159265358979323846;
+
+#accept if passed in as arguments.
+if( scalar ( @ARGV ) == 4 )
+{
+	$inPDBName       = shift;
+	$yTurn           = shift;
+	$yTranslate      = shift;
+	$nLayers         = shift;
+
+	print "helical structure, turn $yTurn and step $yTranslate\n";
+
+}
+else
+{
+	print "buildHelix: args are: input monomer pdb, rotation about y, translation along y, number of times to repeat\n";
+	die;
+}
+
+
+##############################################
+#
+
+$haveTer = 0;
+
+for( $layer = 0; $layer < $nLayers; $layer++ )
+{
+
+#open the file
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+
+
+#read through the pdb by lines.
+while ( $pdbLine = <$inPDB> ) 
+{
+	#match in coordinates
+	if ( $pdbLine =~ /(ATOM)(\s+\S+\s+\S+\s+\S+\s+\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+)(\s+)(\S+\s+\S+)/ )
+	{
+	    #the regexp automatically dumps the coords into these numbered variables.
+	    $x = $4;
+	    $y = $6;
+	    $z = $8;
+
+#	    print "x:$x     y:$y     z:$z\n";
+
+	    #perform transformations: y rotation and translation.
+	    
+	    $theta  = $yTurn * $layer;
+	    $deltaY = $yTranslate * $layer;
+
+	    $x_new = $x *  cos( $theta )  + $z * sin( $theta );
+	    $z_new = $x * -sin( $theta )  + $z * cos( $theta );
+
+	    $y_new = $y + $deltaY;
+
+	
+	    $x = sprintf( "%5.3f", $x_new);
+	    $y = sprintf( "%5.3f", $y_new);
+	    $z = sprintf( "%5.3f", $z_new);
+	    
+#	    print "x:$x     y:$y     z:$z\n\n";
+
+
+	    
+	    #depending on the size of the number it eats into 
+	    #the leading spaces
+	    $xLeadingSpaces = length($4) + length($3) - length($x);
+	    if( $xLeadingSpaces <= 0 )
+	    { die "format hassles here \n";}	
+	    $xLead = " ";
+	    for( my $j = 0; $j < $xLeadingSpaces - 1; $j++)	
+	    {$xLead = $xLead." ";}
+
+	    $yLeadingSpaces = length($6) + length($5) - length($y);
+	    if( $yLeadingSpaces <= 0 )
+	    { die "format hassles here \n";}	
+	    $yLead = " ";
+	    for( my $j = 0; $j < $yLeadingSpaces - 1; $j++)	
+	    {$yLead = $yLead." ";}
+
+	    $zLeadingSpaces = length($8) + length($7) - length($z);
+	    if( $zLeadingSpaces <= 0 )
+	    { die "format hassles here \n";}	
+	    $zLead = " ";
+	    for( my $j = 0; $j < $zLeadingSpaces - 1; $j++)	
+	    {$zLead = $zLead." ";}
+
+		
+	    $pdbLine = "ATOM".$2.$xLead.$x.$yLead.$y.$zLead.$z.$9.$10;
+			
+	    print $pdbLine."\n";	
+
+	    $haveTer = 0;
+
+	 }
+   	 elsif( $pdbLine =~ /TER/ && $haveTer == 0 )
+	 {
+	     print $pdbLine;
+	     $haveTer = 1;
+	 }
+  }
+
+close  $inPDB;		
+		 
+
+
+      
+}
+
+#all done
+print "END\n";

@@ -1,0 +1,76 @@
+#!/usr/bin/perl
+
+$coord_width = 13;
+$angle_width = 12;
+
+##get lines from stdin or from a filename passed at the command line
+GET_LINE: while($line = <>) {
+
+    ##test for header info
+    if(substr($line, 0) == '\#' )
+    {
+	@asArray = split(/\s+/, $line);
+
+	if( $asArray[0] =~ /Number/ ) {
+	    print $asArray[1]."\n";
+	}
+	elsif(  $asArray[0] =~ /Boxx/ ) {
+	    print $asArray[1]."\n";
+	}
+	elsif(  $asArray[0] =~ /Boxy/ ) {
+	    print $asArray[1]."\n";
+	}
+	elsif(  $asArray[0] =~ /Boxz/ ) {
+	    print $asArray[1]."\n";
+	    print "0.0 0.0\n"; ##don't know what this is for.. moving boundary conditions?
+	}
+
+	next GET_LINE;
+    }
+    
+    ##parse out coords and orientations
+    $R[0] = substr($line, 0,                $coord_width );
+    $R[1] = substr($line, $coord_width,     $coord_width );
+    $R[2] = substr($line, 2 * $coord_width, $coord_width );
+
+    $M[0] = substr($line, 3 * $coord_width,  $angle_width );
+    $M[1] = substr($line, 3 * $coord_width + $angle_width,     $angle_width );
+    $M[2] = substr($line, 3 * $coord_width + 2 * $angle_width, $angle_width );
+    
+    ##print out cnf-format atom records
+    ##format is: x,y,z        vx,vy,vz,     p,q,r          vp,vq,vr     label    type-tag
+    print "$R[0] $R[1] $R[2] 0.0 0.0 0.0 $M[0] $M[1] $M[2] 0.0 0.0 0.0 $atomCount 1\n";
+
+    $atomCount++;
+}
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+	$in = " ".$in;
+    }
+
+    return( $in );
+}
+
+##function to strip a string with leading spaces
+sub spstrip{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) > 0 ){
+	if( $in[0] == ' ' )
+        {
+	    $in = substr($in, 1, length( $in ) );
+	}
+	else
+	{
+	    return( $in );
+	}
+    }
+
+    return( $in );
+}

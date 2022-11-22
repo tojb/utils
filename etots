@@ -1,0 +1,60 @@
+#!/usr/bin/perl
+#perl script to get total-energy values out of a sander dump file.
+
+#get argument
+if( scalar ( @ARGV ) < 1 )
+{
+	die "requires minimum 1 argument: filename of a sander .out file.\n";
+}
+
+#loop over each file passed in.
+FILE: while( @ARGV >= 1 )
+{
+
+$fileName = shift;
+
+#open file
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#Etot values should form an unbroken series, starting from the first one.
+my $gotFirst = 0;
+my $sinceHit = 0;
+
+#read the file into an array
+while ( $input = <$in> ) 
+{
+	#check for Etots.
+	if( $input =~ /Etot\s+=\s+(\S+)(\s*)/ )
+	{
+		$gotFirst = 1;
+		$sinceHit = 0;
+
+		print $1."\n";
+
+	}
+	elsif( $input =~ /KE\sTrans\s*/ )
+	{
+	        #allow for the occasional extra bit of info
+	        $sinceHit = 0;
+	}
+	else 
+	{
+		$sinceHit++;
+		
+		if( $sinceHit >= 9 )
+		{if( $gotFirst == 1 )
+		{
+			#perhaps useful to mark the discontinu
+		        #print "0";
+
+			#"reached end of $fileName\n";
+		
+			close $in;
+			next FILE;
+		}}		
+	}
+}
+
+close $in;
+
+}

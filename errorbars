@@ -1,0 +1,62 @@
+#!/usr/bin/perl
+#perl script to make a data file with errorbars
+
+#get argument
+if( scalar ( @ARGV ) != 1 )
+{
+	die "requires 1 argument: filename of a file with  numbers in\n";
+}
+$fileName = shift;
+
+
+#open files
+open( my $in,  $fileName )    or die "Couldn't read $fileName: $!";
+
+#read the files into arrays
+while ( $input = <$in> ) 
+{
+	@inLine = split( /\s+|,\s+/, $input ); #pipe == regexp "or".
+	
+	push(  @{$inHash{$inLine[0]}}, $inLine[1]);
+
+}	
+close $in;
+
+#loop over data
+for my $xVal ( keys %inHash )
+{
+    #define a list of the entries made for this x-value
+    my @yList = @{$inHash{$xVal}};
+
+    #get mean
+    $yMean{$xVal} = 0.0;
+    foreach my $yVal ( @yList )
+    {
+	$yMean{$xVal} += $yVal;
+    }
+    $yMean{$xVal} = $yMean{$xVal} / scalar(  @yList );
+
+
+    #get Standard deviation
+    $ySD{$xVal} = 0;
+    foreach my $yVal ( @yList )
+    {
+	$ySD{$xVal} += ( ( $yVal - $yMean{$xVal} )*( $yVal - $yMean{$xVal} )) ;
+    }
+    $ySD{$xVal} = $ySD{$xVal} /  ( scalar(@yList) - 1);
+    $ySD{$xVal} = sqrt( $ySD{$xVal} );
+
+    
+}
+
+#sort numerically by xVal and print results
+for my $xVal ( sort {$a <=> $b} keys %yMean )
+{
+    #print "$xVal ". scalar(@{$inHash{$xVal}}). " \n";
+    #foreach my $entry @{$inHash{$xVal}}
+    #{
+	#
+    #} 
+
+    print "$xVal $yMean{$xVal} $ySD{$xVal} \n\n";
+}

@@ -1,0 +1,107 @@
+#!/usr/bin/perl
+#perl script to get rid of hydrogens from a pdb file
+#
+#
+#
+#to run:$ perl -w script.prl
+#josh.
+
+##############################################
+# check parameters:
+#accept if passed in as arguments.
+
+if( scalar ( @ARGV ) < 1 )
+{
+	print "entToPdb.prl: requires single argument, an input pdb file\n";
+
+	die;
+}
+
+
+
+##############################################
+#
+
+while( scalar ( @ARGV ) >= 1 ) #loop over input files
+{
+	$inPDBName       = shift;
+
+
+#open the file
+open( my $inPDB,  $inPDBName )    or die "Couldn't read $inPDBName: $!";
+
+
+#initialise a counter
+$lastRes = 0;
+
+#read through the pdb by lines.
+while ( $pdbLine = <$inPDB> ) 
+{
+    #match a pattern to check we have an atom entry
+    if(  ( $pdbLine =~ /ATOM\s+\S+\s+(\S+)\s+(\S+)\s+(\S+)*/   )
+      || ( $pdbLine =~ /HETATM\s+\S+\s+(\S+)\s+(\S+)\s+(\S+)*/ ) )
+	{
+	    #the regexp ought to dump the atom and residue names into these.
+	    $atom      = $1;
+	    $resname   = $2;
+	    $resnumber = $3;
+
+	    #catch a potential problem if chains are id'd by a letter
+	    if( ! ( $resnumber =~ /\d+/ ) )
+	    {
+		#read the resnumber out as being the next non-space along
+		$pdbLine =~ /\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S+)*/;
+		$resnumber = $1;
+
+	    }
+
+
+	    #search and replace the funny-named hydrogens 
+	    #that leap doesn't like
+	    if( (  $atom =~ /1H/ )
+	||	(  $atom =~ /2H/ )
+	||	(  $atom =~ /3H/ ) )
+	    {
+		#or actually.... just drop them and go to the next line
+		next;
+	    }
+
+	    #catch this non-standard resname for an amine cap
+	    if( $resname eq "NH2")
+	    {
+		#replace NH2 with NHE in string $pdbline
+		$pdbLine =~ s/NH2/NHE/g;
+
+		#change the atom names as well
+		$pdbLine =~ s/NXT/N  /g ;
+		$pdbLine =~ s/1H\s/1HN/g ;
+		$pdbLine =~ s/2H\s/2HN/g ;
+
+	    }
+
+
+	    #nmethyl groups might need looking at
+	    if( $resname eq "NME")
+	    {
+		#replace HCA with CH3 in string $pdbline
+		$pdbLine =~ s/HCA/CH3/g;
+	    }
+
+
+	    #check if we need to insert a 'TER' card
+	    if( $resnumber < $lastRes )
+	    {
+		print "TER\n";
+	    }
+	    $lastRes = $resnumber; #and update the counter.
+
+
+	    print $pdbLine;
+
+    }
+
+
+}
+close $inPDB;
+
+} #end loop over files

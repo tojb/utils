@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+
+$coord_width = 13;
+$angle_width = 12;
+
+$atomLine  = "ATOM   0001  CA  GLY   001    -000.000-000.000-000.000  1.00  0.00\n";
+$atomCount = 1;
+
+##get lines from stdin or from a filename passed at the command line
+GET_LINE: while($line = <>) {
+
+    ##skip comments
+    if(substr($line, 0) == '\#' )
+    {
+	next GET_LINE;
+    }
+    
+    ##parse out coords and orientations
+    $R[0] = substr($line, 0,                $coord_width );
+    $R[1] = substr($line, $coord_width,     $coord_width );
+    $R[2] = substr($line, 2 * $coord_width, $coord_width );
+    
+    ##print out pdb-format atom records
+
+    ##copy the template line
+    $outLine = $atomLine;
+    
+    #insert the atom number
+    substr($outLine, 7, 4) = pad($atomCount, 4); 
+
+    #insert the coordinates
+    substr($outLine, 30, 8) =  substr($R[0], 0, 8);
+    substr($outLine, 38, 8) =  substr($R[1], 0, 8);
+    substr($outLine, 46, 8) =  substr($R[2], 0, 8);
+    print $outLine;
+
+    $atomCount++;
+}
+
+##function to pad a string with leading spaces
+sub pad{
+    $in = shift;
+    $l  = shift;
+
+    while( length( $in ) < $l ){
+	$in = " ".$in;
+    }
+
+    return( $in );
+}
